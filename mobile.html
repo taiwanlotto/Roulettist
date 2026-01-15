@@ -1254,28 +1254,36 @@
             const resultNumber = document.getElementById('resultNumber');
             const resultProfit = document.getElementById('resultProfit');
 
-            resultNumber.textContent = winningNumber;
+            // 先隱藏並清空舊結果，避免閃現上期號碼
+            resultDisplay.classList.remove('show');
+            resultNumber.textContent = '--';
+            resultProfit.textContent = '';
 
-            const num = parseInt(winningNumber);
-            // 輪盤扇區顏色：n % 3: 0=blue, 1=green, 2=red
-            const colorIndex = num % 3;
-            resultNumber.className = 'result-number';
-            if (colorIndex === 0) resultNumber.classList.add('blue');      // 3,6,9,12,15,18...
-            else if (colorIndex === 1) resultNumber.classList.add('green'); // 1,4,7,10,13,16...
-            else resultNumber.classList.add('red');                         // 2,5,8,11,14,17...
+            // 短暫延遲後顯示新結果
+            setTimeout(() => {
+                resultNumber.textContent = winningNumber;
 
-            if (profit > 0) {
-                resultProfit.textContent = `+$${profit.toLocaleString()}`;
-                resultProfit.className = 'result-profit win';
-            } else if (profit < 0) {
-                resultProfit.textContent = `-$${Math.abs(profit).toLocaleString()}`;
-                resultProfit.className = 'result-profit lose';
-            } else {
-                resultProfit.textContent = '$0';
-                resultProfit.className = 'result-profit none';
-            }
+                const num = parseInt(winningNumber);
+                // 輪盤扇區顏色：n % 3: 0=blue, 1=green, 2=red
+                const colorIndex = num % 3;
+                resultNumber.className = 'result-number';
+                if (colorIndex === 0) resultNumber.classList.add('blue');      // 3,6,9,12,15,18...
+                else if (colorIndex === 1) resultNumber.classList.add('green'); // 1,4,7,10,13,16...
+                else resultNumber.classList.add('red');                         // 2,5,8,11,14,17...
 
-            resultDisplay.classList.add('show');
+                if (profit > 0) {
+                    resultProfit.textContent = `+$${profit.toLocaleString()}`;
+                    resultProfit.className = 'result-profit win';
+                } else if (profit < 0) {
+                    resultProfit.textContent = `-$${Math.abs(profit).toLocaleString()}`;
+                    resultProfit.className = 'result-profit lose';
+                } else {
+                    resultProfit.textContent = '$0';
+                    resultProfit.className = 'result-profit none';
+                }
+
+                resultDisplay.classList.add('show');
+            }, 100);
         }
 
         function hideGameResult() {
