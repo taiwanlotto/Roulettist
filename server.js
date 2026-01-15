@@ -349,10 +349,25 @@ async function handleAdminQuery(data) {
 function publishGameState() {
     if (!mqttClient || !mqttClient.connected) return;
 
+    // 計算倒數秒數
+    const nowSeconds = new Date().getSeconds();
+    let countdown;
+
+    // 0-10秒: stop 停止期，倒數到 11 秒進入投注期
+    // 11-50秒: betting 投注期，倒數到 51 秒停止
+    // 51-59秒: spinning 開獎期，倒數到 0 秒結算
+    if (nowSeconds >= 0 && nowSeconds <= 10) {
+        countdown = 10 - nowSeconds; // 停止期剩餘秒數
+    } else if (nowSeconds >= 11 && nowSeconds <= 50) {
+        countdown = 50 - nowSeconds; // 投注期剩餘秒數
+    } else {
+        countdown = 59 - nowSeconds + 1; // 開獎期剩餘秒數
+    }
+
     const state = {
         phase: currentPhase,
         roundNumber: currentRoundNumber,
-        seconds: new Date().getSeconds(),
+        seconds: countdown,
         gameRunning
     };
 
