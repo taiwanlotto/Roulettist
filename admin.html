@@ -1,0 +1,877 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>管理員系統</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #0d3d0d 0%, #1a5d1a 50%, #0d3d0d 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #2e8b2e;
+        }
+        .header h1 {
+            color: #90EE90;
+            font-size: 28px;
+        }
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .tab-btn {
+            padding: 12px 25px;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid #2e8b2e;
+            border-radius: 8px;
+            color: #90EE90;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+        .tab-btn:hover {
+            background: rgba(46, 139, 46, 0.3);
+        }
+        .tab-btn.active {
+            background: #2e8b2e;
+            color: white;
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .status-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0,0,0,0.4);
+            padding: 15px 20px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border: 2px solid #2e8b2e;
+        }
+        .phase-display {
+            font-size: 18px;
+        }
+        .phase-display .phase {
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-weight: bold;
+        }
+        .phase.stop { background: #e74c3c; }
+        .phase.betting { background: #27ae60; }
+        .phase.spinning { background: #f39c12; }
+        .timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #90EE90;
+        }
+        .main-content {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+        }
+        .panel {
+            background: rgba(0,0,0,0.4);
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #2e8b2e;
+        }
+        .panel h2 {
+            color: #90EE90;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid rgba(144,238,144,0.3);
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .summary-item {
+            background: rgba(0,0,0,0.3);
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .summary-item .label {
+            color: #aaa;
+            font-size: 14px;
+            margin-bottom: 5px;
+        }
+        .summary-item .value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #90EE90;
+        }
+        .summary-item .value.positive { color: #27ae60; }
+        .summary-item .value.negative { color: #e74c3c; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        th {
+            background: rgba(0,0,0,0.3);
+            color: #90EE90;
+        }
+        tr:hover {
+            background: rgba(255,255,255,0.05);
+        }
+        .online-status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+        .online-status.online { background: #27ae60; }
+        .online-status.offline { background: #7f8c8d; }
+        .recharge-form {
+            display: grid;
+            gap: 15px;
+            max-width: 400px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #90EE90;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #2e8b2e;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.3);
+            color: white;
+            font-size: 14px;
+        }
+        .btn {
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #2e8b2e;
+            color: white;
+        }
+        .btn-primary:hover {
+            background: #3a9f3a;
+        }
+        .btn-secondary {
+            background: #495057;
+            color: white;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+        .filter-bar select {
+            padding: 8px 15px;
+            border-radius: 5px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid #2e8b2e;
+            color: white;
+        }
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        @media (max-width: 900px) {
+            .stats-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+        .stat-card {
+            background: rgba(0,0,0,0.3);
+            padding: 20px;
+            border-radius: 10px;
+            text-align: center;
+        }
+        .stat-card .stat-label {
+            font-size: 14px;
+            color: #adb5bd;
+            margin-bottom: 5px;
+        }
+        .stat-card .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #90EE90;
+        }
+        .stat-card .stat-value.positive { color: #51cf66; }
+        .stat-card .stat-value.negative { color: #ff6b6b; }
+        .records-table {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .connection-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #e74c3c;
+        }
+        .connection-dot.connected {
+            background: #27ae60;
+        }
+        .profit-value.positive { color: #51cf66; }
+        .profit-value.negative { color: #ff6b6b; }
+        .message {
+            padding: 10px 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+        }
+        .message.success {
+            background: rgba(39, 174, 96, 0.3);
+            border: 1px solid #27ae60;
+            color: #27ae60;
+        }
+        .message.error {
+            background: rgba(231, 76, 60, 0.3);
+            border: 1px solid #e74c3c;
+            color: #e74c3c;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎰 管理員系統</h1>
+    </div>
+
+    <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('realtime')">📊 即時監控</button>
+        <button class="tab-btn" onclick="switchTab('recharge')">💰 會員充值</button>
+        <button class="tab-btn" onclick="switchTab('records')">📋 押注記錄</button>
+        <button class="tab-btn" onclick="switchTab('stats')">📈 損益統計</button>
+    </div>
+
+    <div class="status-bar">
+        <div class="connection-status">
+            <div class="connection-dot" id="connectionDot"></div>
+            <span id="connectionText">連線中...</span>
+        </div>
+        <div class="phase-display">
+            遊戲狀態: <span class="phase" id="gamePhase">--</span>
+        </div>
+        <div>
+            期數: <span id="roundNumber">--</span>
+        </div>
+        <div class="timer">
+            <span id="timerDisplay">--</span> 秒
+        </div>
+    </div>
+
+    <!-- 即時監控 -->
+    <div id="tab-realtime" class="tab-content active">
+        <div class="summary-grid">
+            <div class="summary-item">
+                <div class="label">本局總投注</div>
+                <div class="value" id="totalBets">$0</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">投注人數</div>
+                <div class="value" id="totalPlayers">0</div>
+            </div>
+            <div class="summary-item">
+                <div class="label">上局開獎</div>
+                <div class="value" id="lastNumber">--</div>
+            </div>
+        </div>
+
+        <div class="main-content">
+            <div class="panel">
+                <h2>📊 即時押注明細</h2>
+                <div id="betsDisplay">
+                    <h3 style="color:#90EE90; margin-bottom:10px;">單雙投注</h3>
+                    <table>
+                        <tr><td>單</td><td id="oddTotal">$0</td></tr>
+                        <tr><td>雙</td><td id="evenTotal">$0</td></tr>
+                    </table>
+                    <h3 style="color:#90EE90; margin:15px 0 10px;">大小投注</h3>
+                    <table>
+                        <tr><td>大 (20-38)</td><td id="bigTotal">$0</td></tr>
+                        <tr><td>小 (1-19)</td><td id="smallTotal">$0</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>👥 會員列表</h2>
+                <table>
+                    <thead>
+                        <tr>
+                            <th>狀態</th>
+                            <th>帳號</th>
+                            <th>姓名</th>
+                            <th>餘額</th>
+                        </tr>
+                    </thead>
+                    <tbody id="memberTable">
+                        <tr><td colspan="4" style="text-align:center;color:#888;">載入中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 會員充值 -->
+    <div id="tab-recharge" class="tab-content">
+        <div class="main-content">
+            <div class="panel">
+                <h2>💰 會員充值</h2>
+                <div id="rechargeMessage"></div>
+                <div class="recharge-form">
+                    <div class="form-group">
+                        <label>選擇會員</label>
+                        <select id="rechargeMember">
+                            <option value="">-- 請選擇會員 --</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>充值金額</label>
+                        <input type="number" id="rechargeAmount" placeholder="輸入金額" min="100" step="100">
+                    </div>
+                    <div class="form-group">
+                        <label>備註</label>
+                        <textarea id="rechargeRemark" rows="2" placeholder="選填"></textarea>
+                    </div>
+                    <button class="btn btn-primary" onclick="doRecharge()">確認充值</button>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h2>📋 充值記錄</h2>
+                <div class="filter-bar">
+                    <select id="rechargeFilterDays" onchange="loadRechargeRecords()">
+                        <option value="1">今天</option>
+                        <option value="7">最近7天</option>
+                        <option value="14" selected>最近14天</option>
+                    </select>
+                </div>
+                <div class="records-table">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>時間</th>
+                                <th>會員</th>
+                                <th>金額</th>
+                                <th>變動前</th>
+                                <th>變動後</th>
+                            </tr>
+                        </thead>
+                        <tbody id="rechargeRecordsTable">
+                            <tr><td colspan="5" style="text-align:center;color:#888;">載入中...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 押注記錄 -->
+    <div id="tab-records" class="tab-content">
+        <div class="panel">
+            <h2>📋 押注記錄查詢</h2>
+            <div class="filter-bar">
+                <select id="recordsFilterDays" onchange="loadBetRecords()">
+                    <option value="1">今天</option>
+                    <option value="7">最近7天</option>
+                    <option value="14" selected>最近14天</option>
+                </select>
+                <select id="recordsFilterMember" onchange="loadBetRecords()">
+                    <option value="">全部會員</option>
+                </select>
+                <button class="btn btn-secondary" onclick="loadBetRecords()">刷新</button>
+            </div>
+            <div class="records-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>期數</th>
+                            <th>時間</th>
+                            <th>會員</th>
+                            <th>類型</th>
+                            <th>目標</th>
+                            <th>金額</th>
+                            <th>開獎</th>
+                            <th>損益</th>
+                        </tr>
+                    </thead>
+                    <tbody id="betRecordsTable">
+                        <tr><td colspan="8" style="text-align:center;color:#888;">載入中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 損益統計 -->
+    <div id="tab-stats" class="tab-content">
+        <div class="filter-bar">
+            <select id="statsFilterDays" onchange="loadStats()">
+                <option value="1">今天</option>
+                <option value="7">最近7天</option>
+                <option value="14" selected>最近14天</option>
+            </select>
+        </div>
+        <div class="stats-cards">
+            <div class="stat-card">
+                <div class="stat-label">總局數</div>
+                <div class="stat-value" id="statRounds">0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">總投注額</div>
+                <div class="stat-value" id="statTotalBets">$0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">總派彩</div>
+                <div class="stat-value" id="statTotalPayout">$0</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">系統淨利</div>
+                <div class="stat-value" id="statProfit">$0</div>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h2>📈 開獎記錄</h2>
+            <div class="records-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>期數</th>
+                            <th>時間</th>
+                            <th>開獎號碼</th>
+                            <th>總投注</th>
+                            <th>總派彩</th>
+                            <th>系統損益</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gameResultsTable">
+                        <tr><td colspan="6" style="text-align:center;color:#888;">載入中...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mqttClient;
+        let bets = {};
+        let oddEvenBets = { odd: { total: 0, players: [] }, even: { total: 0, players: [] } };
+        let bigSmallBets = { big: { total: 0, players: [] }, small: { total: 0, players: [] } };
+        let onlinePlayers = new Set();
+        let allMembers = [];
+        let lastWinningNumber = null;
+
+        const MQTT_BROKER = 'wss://tw5399.com:9002';
+        const CLIENT_ID = 'admin_' + Math.random().toString(16).substr(2, 8);
+
+        // 切換分頁
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+
+            document.querySelector(`[onclick="switchTab('${tabId}')"]`).classList.add('active');
+            document.getElementById('tab-' + tabId).classList.add('active');
+
+            // 切換時載入資料
+            if (tabId === 'records') loadBetRecords();
+            if (tabId === 'stats') loadStats();
+            if (tabId === 'recharge') loadRechargeRecords();
+        }
+
+        // 連接 MQTT
+        function connectMQTT() {
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                username: 'palee',
+                password: '888168',
+                clientId: CLIENT_ID,
+                clean: true,
+                reconnectPeriod: 3000
+            });
+
+            mqttClient.on('connect', () => {
+                console.log('MQTT 連線成功');
+                document.getElementById('connectionDot').classList.add('connected');
+                document.getElementById('connectionText').textContent = 'MQTT 已連線';
+
+                mqttClient.subscribe([
+                    'roulette/game/state',
+                    'roulette/game/result',
+                    'roulette/bets/update',
+                    'roulette/admin/data',
+                    `roulette/admin/query/response/${CLIENT_ID}`,
+                    `roulette/admin/recharge/response/${CLIENT_ID}`
+                ]);
+
+                mqttClient.publish('roulette/client/connect', JSON.stringify({ clientId: CLIENT_ID, type: 'admin' }));
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    handleMessage(topic, data);
+                } catch (error) {
+                    console.error('處理訊息錯誤:', error);
+                }
+            });
+
+            mqttClient.on('close', () => {
+                document.getElementById('connectionDot').classList.remove('connected');
+                document.getElementById('connectionText').textContent = '連線中斷，重新連線中...';
+            });
+        }
+
+        function handleMessage(topic, data) {
+            if (topic === 'roulette/game/state') {
+                updatePhaseDisplay(data.phase, data.seconds);
+                if (data.roundNumber) {
+                    document.getElementById('roundNumber').textContent = data.roundNumber;
+                }
+                return;
+            }
+
+            if (topic === 'roulette/game/result') {
+                if (data.type === 'game_result' && data.result) {
+                    lastWinningNumber = data.result.winningNumber;
+                    document.getElementById('lastNumber').textContent = lastWinningNumber;
+                }
+                return;
+            }
+
+            if (topic === 'roulette/bets/update' || topic === 'roulette/admin/data') {
+                if (data.bets) bets = data.bets;
+                if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
+                if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
+                if (data.members) {
+                    allMembers = data.members;
+                    updateMemberSelect();
+                }
+                if (data.onlinePlayers) {
+                    onlinePlayers = new Set(data.onlinePlayers);
+                }
+                updateBetsDisplay();
+                updateMemberTable();
+                return;
+            }
+
+            if (topic === `roulette/admin/query/response/${CLIENT_ID}`) {
+                handleQueryResponse(data);
+                return;
+            }
+
+            if (topic === `roulette/admin/recharge/response/${CLIENT_ID}`) {
+                handleRechargeResponse(data);
+                return;
+            }
+        }
+
+        function updatePhaseDisplay(phase, seconds) {
+            const phaseElement = document.getElementById('gamePhase');
+            const timerElement = document.getElementById('timerDisplay');
+
+            phaseElement.className = 'phase ' + phase;
+            const phaseNames = { 'stop': '結算中', 'betting': '開放下注', 'spinning': '停止下注' };
+            phaseElement.textContent = phaseNames[phase] || phase;
+            if (seconds !== undefined) timerElement.textContent = seconds;
+        }
+
+        function updateBetsDisplay() {
+            let totalAmount = 0;
+            let playerSet = new Set();
+
+            for (let num in bets) {
+                totalAmount += bets[num].total;
+                bets[num].players.forEach(p => playerSet.add(p.id));
+            }
+
+            document.getElementById('oddTotal').textContent = '$' + oddEvenBets.odd.total.toLocaleString();
+            document.getElementById('evenTotal').textContent = '$' + oddEvenBets.even.total.toLocaleString();
+            document.getElementById('bigTotal').textContent = '$' + bigSmallBets.big.total.toLocaleString();
+            document.getElementById('smallTotal').textContent = '$' + bigSmallBets.small.total.toLocaleString();
+
+            totalAmount += oddEvenBets.odd.total + oddEvenBets.even.total;
+            totalAmount += bigSmallBets.big.total + bigSmallBets.small.total;
+
+            oddEvenBets.odd.players.forEach(p => playerSet.add(p.id));
+            oddEvenBets.even.players.forEach(p => playerSet.add(p.id));
+            bigSmallBets.big.players.forEach(p => playerSet.add(p.id));
+            bigSmallBets.small.players.forEach(p => playerSet.add(p.id));
+
+            document.getElementById('totalBets').textContent = '$' + totalAmount.toLocaleString();
+            document.getElementById('totalPlayers').textContent = playerSet.size;
+        }
+
+        function updateMemberTable() {
+            const tbody = document.getElementById('memberTable');
+            if (allMembers.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:#888;">載入中...</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = allMembers.map(member => {
+                const isOnline = onlinePlayers.has(member.id);
+                return `
+                    <tr>
+                        <td><span class="online-status ${isOnline ? 'online' : 'offline'}"></span>${isOnline ? '在線' : '離線'}</td>
+                        <td>${member.username}</td>
+                        <td>${member.name}</td>
+                        <td>$${member.balance.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function updateMemberSelect() {
+            const select1 = document.getElementById('rechargeMember');
+            const select2 = document.getElementById('recordsFilterMember');
+
+            const options = allMembers.map(m => `<option value="${m.id}">${m.username} - ${m.name}</option>`).join('');
+
+            select1.innerHTML = '<option value="">-- 請選擇會員 --</option>' + options;
+            select2.innerHTML = '<option value="">全部會員</option>' + options;
+        }
+
+        // 充值功能
+        function doRecharge() {
+            const memberId = document.getElementById('rechargeMember').value;
+            const amount = parseInt(document.getElementById('rechargeAmount').value);
+            const remark = document.getElementById('rechargeRemark').value;
+
+            if (!memberId) {
+                showMessage('rechargeMessage', '請選擇會員', 'error');
+                return;
+            }
+            if (!amount || amount <= 0) {
+                showMessage('rechargeMessage', '請輸入有效金額', 'error');
+                return;
+            }
+
+            mqttClient.publish('roulette/admin/recharge', JSON.stringify({
+                memberId: parseInt(memberId),
+                amount: amount,
+                operator: 'admin',
+                remark: remark,
+                requestId: CLIENT_ID
+            }));
+        }
+
+        function handleRechargeResponse(data) {
+            if (data.success) {
+                showMessage('rechargeMessage', '充值成功！', 'success');
+                document.getElementById('rechargeAmount').value = '';
+                document.getElementById('rechargeRemark').value = '';
+                loadRechargeRecords();
+            } else {
+                showMessage('rechargeMessage', '充值失敗：' + data.message, 'error');
+            }
+        }
+
+        function showMessage(elementId, message, type) {
+            const el = document.getElementById(elementId);
+            el.innerHTML = `<div class="message ${type}">${message}</div>`;
+            setTimeout(() => el.innerHTML = '', 3000);
+        }
+
+        // 查詢功能
+        let pendingQueryType = null;
+
+        function loadBetRecords() {
+            const days = document.getElementById('recordsFilterDays').value;
+            const memberId = document.getElementById('recordsFilterMember').value;
+
+            pendingQueryType = 'betRecords';
+
+            mqttClient.publish('roulette/admin/query', JSON.stringify({
+                queryType: memberId ? 'memberBetRecords' : 'betRecords',
+                params: { days: parseInt(days), memberId: memberId ? parseInt(memberId) : null },
+                requestId: CLIENT_ID
+            }));
+        }
+
+        function loadRechargeRecords() {
+            const days = document.getElementById('rechargeFilterDays').value;
+            pendingQueryType = 'rechargeRecords';
+
+            mqttClient.publish('roulette/admin/query', JSON.stringify({
+                queryType: 'rechargeRecords',
+                params: { days: parseInt(days) },
+                requestId: CLIENT_ID
+            }));
+        }
+
+        function loadStats() {
+            const days = document.getElementById('statsFilterDays').value;
+            pendingQueryType = 'stats';
+
+            mqttClient.publish('roulette/admin/query', JSON.stringify({
+                queryType: 'systemStats',
+                params: { days: parseInt(days) },
+                requestId: CLIENT_ID
+            }));
+
+            setTimeout(() => {
+                mqttClient.publish('roulette/admin/query', JSON.stringify({
+                    queryType: 'gameResults',
+                    params: { days: parseInt(days) },
+                    requestId: CLIENT_ID
+                }));
+            }, 100);
+        }
+
+        function handleQueryResponse(data) {
+            if (Array.isArray(data)) {
+                if (data.length > 0 && data[0].bet_type) {
+                    renderBetRecords(data);
+                } else if (data.length > 0 && data[0].balance_before !== undefined) {
+                    renderRechargeRecords(data);
+                } else if (data.length > 0 && data[0].winning_number !== undefined) {
+                    renderGameResults(data);
+                } else if (data.length === 0) {
+                    if (pendingQueryType === 'betRecords') {
+                        document.getElementById('betRecordsTable').innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;">暫無記錄</td></tr>';
+                    } else if (pendingQueryType === 'rechargeRecords') {
+                        document.getElementById('rechargeRecordsTable').innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">暫無記錄</td></tr>';
+                    }
+                }
+            } else if (data.totalRounds !== undefined) {
+                document.getElementById('statRounds').textContent = data.totalRounds;
+                document.getElementById('statTotalBets').textContent = '$' + (data.totalBets || 0).toLocaleString();
+                document.getElementById('statTotalPayout').textContent = '$' + (data.totalPayout || 0).toLocaleString();
+                const profitEl = document.getElementById('statProfit');
+                const profit = data.totalProfit || 0;
+                profitEl.textContent = (profit >= 0 ? '+' : '') + '$' + profit.toLocaleString();
+                profitEl.className = 'stat-value ' + (profit >= 0 ? 'positive' : 'negative');
+            }
+        }
+
+        function renderBetRecords(records) {
+            const tbody = document.getElementById('betRecordsTable');
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:#888;">暫無記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = records.map(r => {
+                let targetText = r.bet_target;
+                if (r.bet_type === 'oddeven') targetText = r.bet_target === 'odd' ? '單' : '雙';
+                else if (r.bet_type === 'bigsmall') targetText = r.bet_target === 'big' ? '大' : '小';
+
+                const typeText = { 'number': '號碼', 'oddeven': '單雙', 'bigsmall': '大小' }[r.bet_type] || r.bet_type;
+
+                let profitText = '--';
+                let profitClass = '';
+                if (r.profit !== null) {
+                    profitText = (r.profit >= 0 ? '+' : '') + '$' + r.profit.toLocaleString();
+                    profitClass = r.profit >= 0 ? 'positive' : 'negative';
+                }
+
+                const time = new Date(r.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+
+                return `
+                    <tr>
+                        <td>${r.round_number}</td>
+                        <td>${time}</td>
+                        <td>${r.member_name || r.username || '--'}</td>
+                        <td>${typeText}</td>
+                        <td>${targetText}</td>
+                        <td>$${r.amount.toLocaleString()}</td>
+                        <td>${r.winning_number || '--'}</td>
+                        <td class="profit-value ${profitClass}">${profitText}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderRechargeRecords(records) {
+            const tbody = document.getElementById('rechargeRecordsTable');
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;color:#888;">暫無記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = records.map(r => {
+                const time = new Date(r.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                return `
+                    <tr>
+                        <td>${time}</td>
+                        <td>${r.member_name || r.username}</td>
+                        <td class="profit-value positive">+$${r.amount.toLocaleString()}</td>
+                        <td>$${r.balance_before.toLocaleString()}</td>
+                        <td>$${r.balance_after.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function renderGameResults(records) {
+            const tbody = document.getElementById('gameResultsTable');
+            if (records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#888;">暫無記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = records.map(r => {
+                const time = new Date(r.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+                const profitClass = r.system_profit >= 0 ? 'positive' : 'negative';
+                return `
+                    <tr>
+                        <td>${r.round_number}</td>
+                        <td>${time}</td>
+                        <td style="font-weight:bold;color:#90EE90;">${r.winning_number}</td>
+                        <td>$${r.total_bets.toLocaleString()}</td>
+                        <td>$${r.total_payout.toLocaleString()}</td>
+                        <td class="profit-value ${profitClass}">${r.system_profit >= 0 ? '+' : ''}$${r.system_profit.toLocaleString()}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 啟動
+        connectMQTT();
+    </script>
+</body>
+</html>

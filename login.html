@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>會員登入</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #0d3d0d 0%, #1a5d1a 50%, #0d3d0d 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .login-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            width: 100%;
+            max-width: 400px;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: bold;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: #2e8b2e;
+        }
+
+        .btn-login {
+            width: 100%;
+            background: linear-gradient(135deg, #2e8b2e 0%, #1a5d1a 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .btn-login:active {
+            transform: scale(0.98);
+        }
+
+        .btn-login:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .status {
+            margin-top: 15px;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+            font-weight: bold;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            display: block;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            display: block;
+        }
+
+        .test-accounts {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .test-accounts h3 {
+            color: #1a5d1a;
+            font-size: 16px;
+            margin-bottom: 10px;
+        }
+
+        .test-accounts p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .test-accounts .account {
+            background: white;
+            padding: 8px 12px;
+            margin: 5px 0;
+            border-radius: 5px;
+            border-left: 3px solid #2e8b2e;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>🎰 輪盤遊戲</h1>
+        <p class="subtitle">請登入以開始遊戲</p>
+
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">帳號</label>
+                <input type="text" id="username" placeholder="請輸入帳號" required autocomplete="username">
+            </div>
+
+            <div class="form-group">
+                <label for="password">密碼</label>
+                <input type="password" id="password" placeholder="請輸入密碼" required autocomplete="current-password">
+            </div>
+
+            <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                <input type="checkbox" id="rememberMe" style="width: auto;">
+                <label for="rememberMe" style="margin: 0; font-weight: normal;">記住帳號密碼</label>
+            </div>
+
+            <button type="submit" class="btn-login" id="loginBtn">登入</button>
+
+            <div id="status" class="status"></div>
+        </form>
+
+        <div class="test-accounts">
+            <h3>📋 測試帳號</h3>
+            <p>您可以使用以下任一帳號登入測試：</p>
+            <div class="account">帳號: player01 ~ player10 / 密碼: 1234</div>
+            <p style="margin-top: 10px; font-size: 12px; color: #999;">
+                每個帳號都有不同的初始餘額
+            </p>
+        </div>
+    </div>
+
+    <script>
+        const loginForm = document.getElementById('loginForm');
+        const loginBtn = document.getElementById('loginBtn');
+        const statusDiv = document.getElementById('status');
+        const usernameInput = document.getElementById('username');
+        const passwordInput = document.getElementById('password');
+        const rememberMe = document.getElementById('rememberMe');
+
+        // 檢查是否已經登入
+        const savedMember = localStorage.getItem('member');
+        if (savedMember) {
+            window.location.href = '/mobile.html';
+        }
+
+        // 載入記住的帳號密碼
+        const savedCredentials = localStorage.getItem('savedCredentials');
+        if (savedCredentials) {
+            const creds = JSON.parse(savedCredentials);
+            usernameInput.value = creds.username;
+            passwordInput.value = creds.password;
+            rememberMe.checked = true;
+        }
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            const username = usernameInput.value;
+            const password = passwordInput.value;
+
+            loginBtn.disabled = true;
+            loginBtn.textContent = '登入中...';
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // 儲存會員資料到 localStorage
+                    localStorage.setItem('member', JSON.stringify(result.member));
+
+                    // 記住帳號密碼
+                    if (rememberMe.checked) {
+                        localStorage.setItem('savedCredentials', JSON.stringify({ username, password }));
+                    } else {
+                        localStorage.removeItem('savedCredentials');
+                    }
+
+                    statusDiv.className = 'status success';
+                    statusDiv.textContent = '登入成功！正在跳轉...';
+
+                    // 跳轉到遊戲頁面
+                    setTimeout(() => {
+                        window.location.href = '/mobile.html';
+                    }, 1000);
+                } else {
+                    statusDiv.className = 'status error';
+                    statusDiv.textContent = result.message || '登入失敗';
+
+                    loginBtn.disabled = false;
+                    loginBtn.textContent = '登入';
+                }
+            } catch (error) {
+                statusDiv.className = 'status error';
+                statusDiv.textContent = '連線錯誤，請確認伺服器已啟動';
+
+                loginBtn.disabled = false;
+                loginBtn.textContent = '登入';
+            }
+        });
+    </script>
+</body>
+</html>

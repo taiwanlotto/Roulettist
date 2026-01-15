@@ -1,0 +1,82 @@
+[
+  {
+    "id": 1,
+    "username": "player01",
+    "password": "1234",
+    "name": "王小明",
+    "balance": 0,
+    "status": "active"
+  },
+  {
+    "id": 2,
+    "username": "player02",
+    "password": "1234",
+    "name": "李美玲",
+    "balance": 0,
+    "status": "active"
+  },
+  {
+    "id": 3,
+    "username": "player03",
+    "password": "1234",
+    "name": "張大華",
+    "balance": 17000,
+    "status": "active"
+  },
+  {
+    "id": 4,
+    "username": "player04",
+    "password": "1234",
+    "name": "陳志明",
+    "balance": 12000,
+    "status": "active"
+  },
+  {
+    "id": 5,
+    "username": "player05",
+    "password": "1234",
+    "name": "林淑芬",
+    "balance": 18000,
+    "status": "active"
+  },
+  {
+    "id": 6,
+    "username": "player06",
+    "password": "1234",
+    "name": "黃建國",
+    "balance": 25000,
+    "status": "active"
+  },
+  {
+    "id": 7,
+    "username": "player07",
+    "password": "1234",
+    "name": "吳雅婷",
+    "balance": 16000,
+    "status": "active"
+  },
+  {
+    "id": 8,
+    "username": "player08",
+    "password": "1234",
+    "name": "蔡宗翰",
+    "balance": 22000,
+    "status": "active"
+  },
+  {
+    "id": 9,
+    "username": "player09",
+    "password": "1234",
+    "name": "鄭佳玲",
+    "balance": 13000,
+    "status": "active"
+  },
+  {
+    "id": 10,
+    "username": "player10",
+    "password": "1234",
+    "name": "劉俊傑",
+    "balance": 19000,
+    "status": "active"
+  }
+]

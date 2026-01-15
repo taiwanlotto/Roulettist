@@ -1,0 +1,6 @@
+node_modules/
+.claude/
+*.log
+nul
+tmpclaude-*
+.env

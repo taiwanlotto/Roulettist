@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>輪盤遊戲主控台</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #0d3d0d 0%, #1a5d1a 50%, #0d3d0d 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 2px solid #2e8b2e;
+        }
+
+        .header h1 {
+            color: #90EE90;
+            font-size: 32px;
+            text-shadow: 0 0 10px rgba(144, 238, 144, 0.5);
+        }
+
+        .main-display {
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        @media (max-width: 900px) {
+            .main-display {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .wheel-section {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            border: 2px solid #2e8b2e;
+        }
+
+        .round-info {
+            font-size: 18px;
+            color: #90EE90;
+            margin-bottom: 10px;
+        }
+
+        .timer-display {
+            font-size: 60px;
+            font-weight: bold;
+            margin: 10px 0;
+            text-shadow: 0 0 20px rgba(144, 238, 144, 0.8);
+        }
+
+        .timer-display.stop { color: #ff6b6b; }
+        .timer-display.betting { color: #90EE90; }
+        .timer-display.spinning { color: #FFD700; }
+
+        .phase-info {
+            font-size: 28px;
+            padding: 10px 30px;
+            border-radius: 30px;
+            display: inline-block;
+            margin-bottom: 20px;
+        }
+
+        .phase-info.stop {
+            background: rgba(255, 107, 107, 0.3);
+            color: #ff6b6b;
+            border: 2px solid #ff6b6b;
+        }
+
+        .phase-info.betting {
+            background: rgba(144, 238, 144, 0.3);
+            color: #90EE90;
+            border: 2px solid #90EE90;
+        }
+
+        .phase-info.spinning {
+            background: rgba(255, 215, 0, 0.3);
+            color: #FFD700;
+            border: 2px solid #FFD700;
+        }
+
+        .wheel-container {
+            position: relative;
+            width: 500px;
+            height: 500px;
+            margin: 20px auto;
+            margin-left: calc(50% - 250px + 23px);
+        }
+
+        .roulette-wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            background: conic-gradient(
+                #e74c3c 0deg 9.23deg,
+                #3498db 9.23deg 18.46deg,
+                #2ecc71 18.46deg 27.69deg,
+                #e74c3c 27.69deg 36.92deg,
+                #3498db 36.92deg 46.15deg,
+                #2ecc71 46.15deg 55.38deg,
+                #e74c3c 55.38deg 64.61deg,
+                #3498db 64.61deg 73.84deg,
+                #2ecc71 73.84deg 83.07deg,
+                #e74c3c 83.07deg 92.3deg,
+                #3498db 92.3deg 101.53deg,
+                #2ecc71 101.53deg 110.76deg,
+                #e74c3c 110.76deg 120deg,
+                #3498db 120deg 129.23deg,
+                #2ecc71 129.23deg 138.46deg,
+                #e74c3c 138.46deg 147.69deg,
+                #3498db 147.69deg 156.92deg,
+                #2ecc71 156.92deg 166.15deg,
+                #e74c3c 166.15deg 175.38deg,
+                #3498db 175.38deg 184.61deg,
+                #2ecc71 184.61deg 193.84deg,
+                #e74c3c 193.84deg 203.07deg,
+                #3498db 203.07deg 212.3deg,
+                #2ecc71 212.3deg 221.53deg,
+                #e74c3c 221.53deg 230.76deg,
+                #3498db 230.76deg 240deg,
+                #2ecc71 240deg 249.23deg,
+                #e74c3c 249.23deg 258.46deg,
+                #3498db 258.46deg 267.69deg,
+                #2ecc71 267.69deg 276.92deg,
+                #e74c3c 276.92deg 286.15deg,
+                #3498db 286.15deg 295.38deg,
+                #2ecc71 295.38deg 304.61deg,
+                #e74c3c 304.61deg 313.84deg,
+                #3498db 313.84deg 323.07deg,
+                #2ecc71 323.07deg 332.3deg,
+                #e74c3c 332.3deg 341.53deg,
+                #3498db 341.53deg 350.76deg,
+                #2ecc71 350.76deg 360deg
+            );
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5),
+                        inset 0 0 50px rgba(0, 0, 0, 0.3);
+            border: 8px solid #ffd700;
+            transition: transform 5s cubic-bezier(0.17, 0.67, 0.12, 0.99);
+        }
+
+        .roulette-wheel.spinning {
+            /* 使用 JS 控制動畫 */
+        }
+
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+
+        .wheel-numbers-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+
+        .wheel-number {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            text-align: center;
+            line-height: 28px;
+            font-size: 11px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .wheel-center {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #1a5d1a 0%, #0d3d0d 100%);
+            border: 4px solid #ffd700;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 40px;
+            font-weight: bold;
+            color: #ffd700;
+            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            z-index: 10;
+        }
+
+        .wheel-pointer {
+            position: absolute;
+            top: -25px;
+            left: calc(50% - 16px);
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-top: 40px solid #ffd700;
+            filter: drop-shadow(0 4px 6px rgba(0, 0, 0, 0.3));
+            z-index: 20;
+        }
+
+        .winning-number {
+            font-size: 80px;
+            font-weight: bold;
+            width: 150px;
+            height: 150px;
+            line-height: 150px;
+            margin: 20px auto;
+            border-radius: 50%;
+            background: linear-gradient(145deg, #2e8b2e 0%, #1a5d1a 100%);
+            box-shadow: 0 0 30px rgba(144, 238, 144, 0.5),
+                        inset 0 0 20px rgba(0, 0, 0, 0.3);
+            border: 4px solid #90EE90;
+        }
+
+        .winning-number.red { background: linear-gradient(145deg, #ff6b6b 0%, #c0392b 100%); border-color: #ff6b6b; }
+        .winning-number.blue { background: linear-gradient(145deg, #4dabf7 0%, #1971c2 100%); border-color: #4dabf7; }
+        .winning-number.green { background: linear-gradient(145deg, #51cf66 0%, #2f9e44 100%); border-color: #51cf66; }
+
+        .sidebar {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .info-panel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #2e8b2e;
+        }
+
+        .info-panel h3 {
+            color: #90EE90;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(144, 238, 144, 0.3);
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #adb5bd;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            color: #90EE90;
+        }
+
+        .stat-value.positive { color: #51cf66; }
+        .stat-value.negative { color: #ff6b6b; }
+
+        .bets-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .bet-panel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #2e8b2e;
+        }
+
+        .bet-panel h3 {
+            color: #90EE90;
+            margin-bottom: 15px;
+            text-align: center;
+            font-size: 18px;
+        }
+
+        .bet-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+
+        .bet-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .bet-type {
+            font-weight: bold;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 16px;
+        }
+
+        .bet-type.odd { background: #e67700; color: white; }
+        .bet-type.even { background: #1971c2; color: white; }
+        .bet-type.big { background: #e03131; color: white; }
+        .bet-type.small { background: #2f9e44; color: white; }
+
+        .bet-amount {
+            font-size: 20px;
+            font-weight: bold;
+            color: #90EE90;
+        }
+
+        .number-grid {
+            display: grid;
+            grid-template-columns: repeat(10, 1fr);
+            gap: 5px;
+        }
+
+        .number-item {
+            text-align: center;
+            padding: 8px 4px;
+            border-radius: 5px;
+            font-size: 12px;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .number-item .num {
+            font-weight: bold;
+            color: #90EE90;
+            font-size: 14px;
+        }
+
+        .number-item .amount {
+            color: #adb5bd;
+            font-size: 10px;
+        }
+
+        .number-item.has-bet {
+            background: rgba(144, 238, 144, 0.2);
+            border: 1px solid #2e8b2e;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 15px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 25px;
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            border: 1px solid #2e8b2e;
+        }
+
+        .connection-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff6b6b;
+        }
+
+        .connection-dot.connected {
+            background: #51cf66;
+            box-shadow: 0 0 10px rgba(81, 207, 102, 0.5);
+        }
+
+        .history-panel {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 15px;
+            border: 2px solid #2e8b2e;
+        }
+
+        .history-panel h3 {
+            color: #90EE90;
+            margin-bottom: 15px;
+        }
+
+        .history-numbers {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .history-num {
+            width: 40px;
+            height: 40px;
+            line-height: 40px;
+            text-align: center;
+            border-radius: 50%;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .history-num.red { background: #e74c3c; }
+        .history-num.blue { background: #3498db; }
+        .history-num.green { background: #2ecc71; }
+
+        .qrcode-panel {
+            position: absolute;
+            left: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid #2e8b2e;
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+        }
+
+        .qrcode-panel .qr-title {
+            color: #90EE90;
+            font-size: 14px;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        .qrcode-panel #qrcode {
+            background: white;
+            padding: 10px;
+            border-radius: 8px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎰 輪盤遊戲主控台</h1>
+    </div>
+
+    <div class="main-display">
+        <div class="wheel-section" style="position: relative;">
+            <!-- QR Code 區域 -->
+            <div class="qrcode-panel">
+                <div class="qr-title">請掃瞄登入</div>
+                <div id="qrcode"></div>
+            </div>
+
+            <div class="round-info">期數: <span id="roundNumber">--</span></div>
+            <div class="phase-info" id="phaseInfo">連線中...</div>
+            <div class="timer-display" id="timerDisplay">--</div>
+
+            <div class="wheel-container">
+                <div class="wheel-pointer"></div>
+                <div class="roulette-wheel" id="rouletteWheel">
+                    <div class="wheel-numbers-container" id="wheelNumbers"></div>
+                </div>
+                <div class="wheel-center" id="wheelCenter">--</div>
+            </div>
+
+            <div style="color: #adb5bd; margin-top: 10px;">
+                開獎號碼
+            </div>
+        </div>
+
+        <div class="sidebar">
+            <div class="info-panel">
+                <h3>📊 本局統計</h3>
+                <div class="stat-row">
+                    <span class="stat-label">總投注</span>
+                    <span class="stat-value" id="totalBets">$0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">投注人數</span>
+                    <span class="stat-value" id="playerCount">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">在線人數</span>
+                    <span class="stat-value" id="onlineCount">0</span>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h3>💰 當日損益</h3>
+                <div class="stat-row">
+                    <span class="stat-label">總局數</span>
+                    <span class="stat-value" id="todayRounds">0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">總投注</span>
+                    <span class="stat-value" id="todayBets">$0</span>
+                </div>
+                <div class="stat-row">
+                    <span class="stat-label">系統損益</span>
+                    <span class="stat-value" id="todayProfit">$0</span>
+                </div>
+            </div>
+
+            <div class="info-panel">
+                <h3>📜 最近開獎</h3>
+                <div class="history-numbers" id="historyNumbers">
+                    <!-- 動態產生 -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="bets-grid">
+        <div class="bet-panel">
+            <h3>單雙投注</h3>
+            <div class="bet-row">
+                <span class="bet-type odd">單</span>
+                <span class="bet-amount" id="oddAmount">$0</span>
+            </div>
+            <div class="bet-row">
+                <span class="bet-type even">雙</span>
+                <span class="bet-amount" id="evenAmount">$0</span>
+            </div>
+        </div>
+
+        <div class="bet-panel">
+            <h3>大小投注</h3>
+            <div class="bet-row">
+                <span class="bet-type big">大</span>
+                <span class="bet-amount" id="bigAmount">$0</span>
+            </div>
+            <div class="bet-row">
+                <span class="bet-type small">小</span>
+                <span class="bet-amount" id="smallAmount">$0</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="history-panel">
+        <h3>號碼投注分布</h3>
+        <div class="number-grid" id="numberGrid">
+            <!-- 動態產生 -->
+        </div>
+    </div>
+
+    <div class="connection-status">
+        <div class="connection-dot" id="connectionDot"></div>
+        <span id="connectionText">連線中...</span>
+    </div>
+
+    <script>
+        let mqttClient;
+        let bets = {};
+        let oddEvenBets = { odd: { total: 0, players: [] }, even: { total: 0, players: [] } };
+        let bigSmallBets = { big: { total: 0, players: [] }, small: { total: 0, players: [] } };
+        let historyNumbers = [];
+
+        const MQTT_BROKER = 'wss://tw5399.com:9002';
+        const CLIENT_ID = 'display_' + Math.random().toString(16).substr(2, 8);
+
+        // 初始化號碼網格
+        function initNumberGrid() {
+            const grid = document.getElementById('numberGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 39; i++) {
+                const num = i.toString().padStart(2, '0');
+                const item = document.createElement('div');
+                item.className = 'number-item';
+                item.id = 'num-' + num;
+                item.innerHTML = `
+                    <div class="num">${num}</div>
+                    <div class="amount">$0</div>
+                `;
+                grid.appendChild(item);
+            }
+        }
+
+        // 初始化轉盤號碼
+        function initWheelNumbers() {
+            const container = document.getElementById('wheelNumbers');
+            const degPerNum = 360 / 39;
+            const radius = 225; // 號碼距離圓心的距離（更靠近邊緣）
+
+            for (let i = 1; i <= 39; i++) {
+                const num = document.createElement('div');
+                num.className = 'wheel-number';
+                num.textContent = i.toString().padStart(2, '0');
+
+                // 計算角度（從頂部開始，順時針排列）
+                // 往左上移動，所以角度減少一些（逆時針偏移）
+                const angle = (i - 1) * degPerNum - 90 - 4; // 額外減4度往左上偏移
+                const radian = angle * (Math.PI / 180);
+
+                // 計算位置（250 是圓心位置）
+                const x = 250 + radius * Math.cos(radian) - 14 - 9;
+                const y = 250 + radius * Math.sin(radian) - 14 - 7;
+
+                num.style.left = x + 'px';
+                num.style.top = y + 'px';
+
+                // 讓號碼旋轉對準中心點
+                const rotateAngle = (i - 1) * degPerNum - 4;
+                num.style.transform = `rotate(${rotateAngle}deg)`;
+
+                container.appendChild(num);
+            }
+        }
+
+        // 初始化 QR Code
+        function initQRCode() {
+            const loginUrl = window.location.origin + '/login.html';
+            new QRCode(document.getElementById('qrcode'), {
+                text: loginUrl,
+                width: 120,
+                height: 120,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+        }
+
+        initNumberGrid();
+        initWheelNumbers();
+        initQRCode();
+
+        // 連接 MQTT
+        function connectMQTT() {
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                username: 'palee',
+                password: '888168',
+                clientId: CLIENT_ID,
+                clean: true,
+                reconnectPeriod: 3000
+            });
+
+            mqttClient.on('connect', () => {
+                console.log('MQTT 連線成功');
+                document.getElementById('connectionDot').classList.add('connected');
+                document.getElementById('connectionText').textContent = 'MQTT 已連線';
+
+                // 訂閱主題
+                mqttClient.subscribe([
+                    'roulette/game/state',
+                    'roulette/game/result',
+                    'roulette/bets/update',
+                    'roulette/admin/data'
+                ]);
+
+                // 通知伺服器客戶端上線
+                mqttClient.publish('roulette/client/connect', JSON.stringify({ clientId: CLIENT_ID, type: 'display' }));
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    handleMessage(topic, data);
+                } catch (error) {
+                    console.error('處理訊息錯誤:', error);
+                }
+            });
+
+            mqttClient.on('error', (err) => {
+                console.error('MQTT 錯誤:', err);
+                document.getElementById('connectionDot').classList.remove('connected');
+                document.getElementById('connectionText').textContent = '連線錯誤';
+            });
+
+            mqttClient.on('close', () => {
+                document.getElementById('connectionDot').classList.remove('connected');
+                document.getElementById('connectionText').textContent = '連線中斷，重新連線中...';
+            });
+        }
+
+        function handleMessage(topic, data) {
+            // 遊戲狀態
+            if (topic === 'roulette/game/state') {
+                updateGameState(data);
+                return;
+            }
+
+            // 遊戲結果
+            if (topic === 'roulette/game/result') {
+                if (data.type === 'spin_wheel') {
+                    // 開始旋轉動畫
+                    startWheelSpin(data.winningNumber);
+                } else if (data.type === 'game_result') {
+                    stopWheelSpin(data.result.winningNumber);
+                    addToHistory(data.result.winningNumber);
+                }
+                return;
+            }
+
+            // 投注更新
+            if (topic === 'roulette/bets/update') {
+                if (data.bets) bets = data.bets;
+                if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
+                if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
+                updateBetsDisplay();
+                return;
+            }
+
+            // 管理員資料
+            if (topic === 'roulette/admin/data') {
+                if (data.bets) bets = data.bets;
+                if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
+                if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
+                if (data.onlinePlayers) {
+                    document.getElementById('onlineCount').textContent = data.onlinePlayers.length;
+                }
+                if (data.systemStats) {
+                    document.getElementById('todayRounds').textContent = data.systemStats.totalRounds;
+                    document.getElementById('todayBets').textContent = '$' + (data.systemStats.totalBets || 0).toLocaleString();
+                    const profitEl = document.getElementById('todayProfit');
+                    const profit = data.systemStats.totalProfit || 0;
+                    profitEl.textContent = (profit >= 0 ? '+' : '') + '$' + profit.toLocaleString();
+                    profitEl.className = 'stat-value ' + (profit >= 0 ? 'positive' : 'negative');
+                }
+                updateBetsDisplay();
+                return;
+            }
+        }
+
+        function updateGameState(data) {
+            const timerDisplay = document.getElementById('timerDisplay');
+            const phaseInfo = document.getElementById('phaseInfo');
+            const roundNumber = document.getElementById('roundNumber');
+            const wheel = document.getElementById('rouletteWheel');
+            const center = document.getElementById('wheelCenter');
+
+            if (data.seconds !== undefined) {
+                timerDisplay.textContent = data.seconds.toString().padStart(2, '0');
+            }
+
+            if (data.roundNumber) {
+                roundNumber.textContent = data.roundNumber;
+            }
+
+            timerDisplay.className = 'timer-display ' + data.phase;
+            phaseInfo.className = 'phase-info ' + data.phase;
+
+            if (data.phase === 'stop') {
+                phaseInfo.textContent = '🔴 結算中';
+                // stop 階段保持開獎結果，不轉動
+                wheel.classList.remove('spinning');
+            } else if (data.phase === 'betting') {
+                phaseInfo.textContent = '🟢 開放下注';
+                // betting 階段 (11-50秒) 輪盤不轉動，保持在上一輪停止的位置
+                wheel.classList.remove('spinning');
+                wheelSpinning = false;
+                center.textContent = '--';
+            } else if (data.phase === 'spinning') {
+                phaseInfo.textContent = '🟡 停止下注';
+                // spinning 階段 (51-59秒) 等待 startWheelSpin 被呼叫開始動畫
+                // 不使用 CSS animation，改用 JS 動畫控制
+                if (!wheelSpinning) {
+                    center.textContent = '?';
+                }
+            }
+        }
+
+        let wheelSpinning = false;
+        let targetNumber = null;
+        let spinAnimationId = null;
+        let currentRotation = 0;
+
+        function startWheelSpin(winningNum) {
+            targetNumber = parseInt(winningNum);
+            const wheel = document.getElementById('rouletteWheel');
+            const center = document.getElementById('wheelCenter');
+
+            wheelSpinning = true;
+            center.textContent = '?';
+
+            // 取得當前輪盤角度作為起始點
+            const currentTransform = wheel.style.transform;
+            const match = currentTransform.match(/rotate\(([^)]+)deg\)/);
+            if (match) {
+                currentRotation = parseFloat(match[1]) % 360;
+            }
+
+            // 計算目標角度 (每個號碼占 360/39 度)
+            const degPerNum = 360 / 39;
+            const targetDeg = (targetNumber - 1) * degPerNum;
+
+            // 總共轉 8 圈 + 到達目標位置，在 8 秒內完成 (51-59秒)
+            const totalSpins = 8;
+            const finalTargetDeg = currentRotation + (totalSpins * 360) + (360 - targetDeg - currentRotation % 360);
+
+            // 使用自訂緩動函數實現由快到慢的效果
+            const duration = 8000; // 8秒完成
+            const startTime = Date.now();
+
+            // 移除 CSS transition，使用 JS 動畫
+            wheel.style.transition = 'none';
+
+            function animate() {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+
+                // 使用緩出緩動函數 (easeOutQuart) - 開始快，結束極慢
+                const easeProgress = 1 - Math.pow(1 - progress, 4);
+
+                const currentDeg = currentRotation + (finalTargetDeg - currentRotation) * easeProgress;
+                wheel.style.transform = `rotate(${currentDeg}deg)`;
+
+                if (progress < 1 && wheelSpinning) {
+                    spinAnimationId = requestAnimationFrame(animate);
+                } else {
+                    // 動畫完成
+                    wheel.style.transform = `rotate(${finalTargetDeg}deg)`;
+                    currentRotation = finalTargetDeg;
+                    center.textContent = winningNum.toString().padStart(2, '0');
+                }
+            }
+
+            // 取消之前的動畫
+            if (spinAnimationId) {
+                cancelAnimationFrame(spinAnimationId);
+            }
+
+            animate();
+        }
+
+        function stopWheelSpin(winningNum) {
+            // 現在由 startWheelSpin 處理完整動畫，這裡只做備用處理
+            const center = document.getElementById('wheelCenter');
+            wheelSpinning = false;
+
+            if (spinAnimationId) {
+                cancelAnimationFrame(spinAnimationId);
+                spinAnimationId = null;
+            }
+
+            // 顯示號碼
+            center.textContent = winningNum.toString().padStart(2, '0');
+        }
+
+        function updateWinningNumber(number) {
+            // 這個函數現在由 stopWheelSpin 處理
+        }
+
+        function addToHistory(number) {
+            historyNumbers.unshift(number);
+            if (historyNumbers.length > 20) historyNumbers.pop();
+            renderHistory();
+        }
+
+        function renderHistory() {
+            const container = document.getElementById('historyNumbers');
+            // 輪盤扇區顏色：根據實際觀察 16=綠, 17=紅, 18=藍
+            // 規律：1=綠, 2=紅, 3=藍, 4=綠, 5=紅, 6=藍...
+            container.innerHTML = historyNumbers.map(num => {
+                const n = parseInt(num);
+                const colorIndex = n % 3;
+                let colorClass;
+                if (colorIndex === 0) colorClass = 'blue';   // 3,6,9,12,15,18,21...
+                else if (colorIndex === 1) colorClass = 'green'; // 1,4,7,10,13,16,19...
+                else colorClass = 'red';   // 2,5,8,11,14,17,20...
+                return `<div class="history-num ${colorClass}">${num}</div>`;
+            }).join('');
+        }
+
+        function updateBetsDisplay() {
+            // 更新單雙投注
+            document.getElementById('oddAmount').textContent = '$' + oddEvenBets.odd.total.toLocaleString();
+            document.getElementById('evenAmount').textContent = '$' + oddEvenBets.even.total.toLocaleString();
+
+            // 更新大小投注
+            document.getElementById('bigAmount').textContent = '$' + bigSmallBets.big.total.toLocaleString();
+            document.getElementById('smallAmount').textContent = '$' + bigSmallBets.small.total.toLocaleString();
+
+            // 更新號碼投注
+            let totalBets = 0;
+            let playerSet = new Set();
+
+            for (let i = 1; i <= 39; i++) {
+                const num = i.toString().padStart(2, '0');
+                const bet = bets[num] || { total: 0, players: [] };
+                const el = document.getElementById('num-' + num);
+                if (el) {
+                    el.querySelector('.amount').textContent = '$' + bet.total.toLocaleString();
+                    el.classList.toggle('has-bet', bet.total > 0);
+                }
+                totalBets += bet.total;
+                bet.players.forEach(p => playerSet.add(p.id));
+            }
+
+            totalBets += oddEvenBets.odd.total + oddEvenBets.even.total;
+            totalBets += bigSmallBets.big.total + bigSmallBets.small.total;
+
+            oddEvenBets.odd.players.forEach(p => playerSet.add(p.id));
+            oddEvenBets.even.players.forEach(p => playerSet.add(p.id));
+            bigSmallBets.big.players.forEach(p => playerSet.add(p.id));
+            bigSmallBets.small.players.forEach(p => playerSet.add(p.id));
+
+            document.getElementById('totalBets').textContent = '$' + totalBets.toLocaleString();
+            document.getElementById('playerCount').textContent = playerSet.size;
+        }
+
+        // 啟動連線
+        connectMQTT();
+    </script>
+</body>
+</html>

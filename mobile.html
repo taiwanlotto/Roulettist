@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手機投注</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #1a5d1a 0%, #0d3d0d 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 15px;
+            padding: 20px;
+            max-width: 500px;
+            margin: 0 auto;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        h1 {
+            color: #1a5d1a;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+
+        .user-info {
+            background: linear-gradient(135deg, #2e8b2e 0%, #1a5d1a 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+        }
+
+        .user-info h2 {
+            font-size: 18px;
+            margin-bottom: 5px;
+        }
+
+        .user-info .balance {
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        .logout-btn {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border: 1px solid white;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            float: right;
+            font-size: 14px;
+        }
+
+        .bet-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        label {
+            font-weight: bold;
+            color: #1a5d1a;
+        }
+
+        input, select {
+            padding: 12px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        input:focus, select:focus {
+            outline: none;
+            border-color: #2e8b2e;
+        }
+
+        button {
+            background: linear-gradient(135deg, #2e8b2e 0%, #1a5d1a 100%);
+            color: white;
+            border: none;
+            padding: 15px;
+            font-size: 18px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: bold;
+        }
+
+        button:active {
+            transform: scale(0.98);
+        }
+
+        .status {
+            text-align: center;
+            padding: 10px;
+            border-radius: 8px;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .quick-amounts {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .quick-amount {
+            padding: 10px;
+            background: #f0f8f0;
+            border: 2px solid #2e8b2e;
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            font-weight: bold;
+            color: #1a5d1a;
+        }
+
+        .quick-amount:active {
+            background: #d0e8d0;
+        }
+
+        .timer-bar {
+            background: linear-gradient(135deg, #0d3d0d 0%, #1a5d1a 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+        }
+
+        .timer-seconds {
+            font-size: 36px;
+            font-weight: bold;
+            color: #90EE90;
+        }
+
+        .timer-phase {
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .timer-phase.betting {
+            color: #90EE90;
+        }
+
+        .timer-phase.stop {
+            color: #ff6b6b;
+        }
+
+        .timer-phase.spinning {
+            color: #FFD700;
+        }
+
+        .round-number {
+            font-size: 12px;
+            color: #90EE90;
+        }
+
+        .result-display {
+            background: linear-gradient(135deg, #0d3d0d 0%, #000000 100%);
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            text-align: center;
+            display: none;
+        }
+
+        .result-display.show {
+            display: block;
+        }
+
+        .result-number {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 10px 0;
+        }
+
+        .result-number.red { color: #ff6b6b; }
+        .result-number.blue { color: #4dabf7; }
+        .result-number.green { color: #90EE90; }
+
+        .result-profit {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        .result-profit.win {
+            color: #90EE90;
+        }
+
+        .result-profit.lose {
+            color: #ff6b6b;
+        }
+
+        .result-profit.none {
+            color: #adb5bd;
+        }
+
+        .result-label {
+            font-size: 14px;
+            color: #adb5bd;
+        }
+
+        .bet-type-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .bet-type-btn {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid #ccc;
+            border-radius: 8px;
+            background: #f8f9fa;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            color: #1a5d1a;
+        }
+
+        .bet-type-btn.active {
+            border-color: #2e8b2e;
+            background: linear-gradient(135deg, #2e8b2e 0%, #1a5d1a 100%);
+            color: white;
+        }
+
+        .bet-type-btn:not(.active):hover {
+            background: #e9ecef;
+        }
+
+        .odd-even-selector {
+            display: none;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .odd-even-selector.show {
+            display: flex;
+        }
+
+        .odd-even-btn {
+            flex: 1;
+            padding: 15px;
+            border: 3px solid #ccc;
+            border-radius: 10px;
+            font-size: 20px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            background: white;
+        }
+
+        .odd-even-btn.odd {
+            color: #e67700;
+        }
+
+        .odd-even-btn.even {
+            color: #1971c2;
+        }
+
+        .odd-even-btn.selected {
+            transform: scale(1.02);
+        }
+
+        .odd-even-btn.odd.selected {
+            border-color: #e67700;
+            background: #fff4e6;
+        }
+
+        .odd-even-btn.even.selected {
+            border-color: #1971c2;
+            background: #e7f5ff;
+        }
+
+        .odd-even-btn.small-btn {
+            color: #2f9e44;
+        }
+
+        .odd-even-btn.big-btn {
+            color: #e03131;
+        }
+
+        .odd-even-btn.small-btn.selected {
+            border-color: #2f9e44;
+            background: #ebfbee;
+        }
+
+        .odd-even-btn.big-btn.selected {
+            border-color: #e03131;
+            background: #fff5f5;
+        }
+
+        .number-selector {
+            display: block;
+        }
+
+        .number-selector.hide {
+            display: none;
+        }
+
+        .payout-info {
+            font-size: 12px;
+            color: #868e96;
+            text-align: center;
+            margin-top: 5px;
+        }
+
+        .auto-bet-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f8f0;
+            border-radius: 8px;
+        }
+
+        .auto-bet-toggle {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .auto-bet-toggle input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .auto-bet-toggle input[type="checkbox"]:disabled {
+            cursor: not-allowed;
+            opacity: 0.5;
+        }
+
+        .auto-bet-toggle.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .auto-bet-label {
+            font-weight: bold;
+            color: #1a5d1a;
+        }
+
+        .auto-bet-status {
+            font-size: 12px;
+            color: #666;
+            flex: 1;
+            text-align: right;
+        }
+
+        .auto-bet-status.active {
+            color: #2f9e44;
+            font-weight: bold;
+        }
+
+        .history-section {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f0f8f0;
+            border-radius: 10px;
+        }
+
+        .history-section h3 {
+            font-size: 16px;
+            color: #1a5d1a;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .history-list {
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .history-item .bet-info {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .history-item .bet-target {
+            font-weight: bold;
+            color: #2e8b2e;
+        }
+
+        .history-item .bet-amount {
+            color: #333;
+        }
+
+        .history-item .bet-result {
+            font-weight: bold;
+        }
+
+        .history-item .bet-result.win {
+            color: #51cf66;
+        }
+
+        .history-item .bet-result.lose {
+            color: #ff6b6b;
+        }
+
+        .history-item .bet-result.pending {
+            color: #868e96;
+        }
+
+        .result-history-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 10px;
+            background: white;
+            border-radius: 6px;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .result-history-item .winning-num {
+            font-weight: bold;
+            font-size: 18px;
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            color: white;
+        }
+
+        .result-history-item .winning-num.red { background: #e74c3c; }
+        .result-history-item .winning-num.blue { background: #3498db; }
+        .result-history-item .winning-num.green { background: #2ecc71; }
+
+        .result-history-item .result-profit {
+            font-weight: bold;
+        }
+
+        .result-history-item .result-profit.win { color: #51cf66; }
+        .result-history-item .result-profit.lose { color: #ff6b6b; }
+        .result-history-item .result-profit.none { color: #868e96; }
+
+        .clear-btn {
+            font-size: 12px;
+            padding: 4px 8px;
+            background: #dee2e6;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            color: #495057;
+        }
+
+        .empty-message {
+            text-align: center;
+            color: #868e96;
+            padding: 15px;
+            font-size: 14px;
+        }
+
+        .history-btn {
+            background: #2e8b2e;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 10px;
+            width: 100%;
+        }
+
+        .history-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .history-modal.show {
+            display: block;
+        }
+
+        .history-modal-content {
+            background: white;
+            margin: 20px auto;
+            padding: 20px;
+            border-radius: 15px;
+            max-width: 500px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .history-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #1a5d1a;
+        }
+
+        .history-modal-header h2 {
+            color: #1a5d1a;
+            font-size: 20px;
+        }
+
+        .close-modal-btn {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .history-filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .history-filter select {
+            flex: 1;
+            padding: 10px;
+            border-radius: 5px;
+        }
+
+        .stats-summary {
+            background: #f0f8f0;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+            color: #1a5d1a;
+        }
+
+        .stat-value.positive {
+            color: #2f9e44;
+        }
+
+        .stat-value.negative {
+            color: #e03131;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎰 輪盤投注</h1>
+
+        <div class="timer-bar">
+            <div>
+                <span class="timer-seconds" id="timerSeconds">--</span>
+                <div class="round-number" id="roundNumber">期數: --</div>
+            </div>
+            <span class="timer-phase" id="timerPhase">連線中...</span>
+        </div>
+
+        <div class="result-display" id="resultDisplay">
+            <div class="result-label">開獎號碼</div>
+            <div class="result-number" id="resultNumber">--</div>
+            <div class="result-label">本局損益</div>
+            <div class="result-profit" id="resultProfit">$0</div>
+        </div>
+
+        <div class="user-info" id="userInfo">
+            <button class="logout-btn" onclick="logout()">登出</button>
+            <h2 id="userName">載入中...</h2>
+            <div class="balance">
+                餘額: $<span id="balance">0</span>
+            </div>
+        </div>
+
+        <div class="bet-form">
+            <div class="bet-type-selector">
+                <div class="bet-type-btn active" data-type="number" onclick="switchBetType('number')">號碼</div>
+                <div class="bet-type-btn" data-type="oddeven" onclick="switchBetType('oddeven')">單雙</div>
+                <div class="bet-type-btn" data-type="bigsmall" onclick="switchBetType('bigsmall')">大小</div>
+            </div>
+
+            <div class="number-selector" id="numberSelector">
+                <label for="number">選擇號碼 (01-39)</label>
+                <select id="number">
+                </select>
+                <div class="payout-info">賠率 1:35</div>
+            </div>
+
+            <div class="odd-even-selector" id="oddEvenSelector">
+                <div class="odd-even-btn odd" data-value="odd" onclick="selectOddEven('odd')">
+                    單<br><small>01,03,05...37</small>
+                </div>
+                <div class="odd-even-btn even" data-value="even" onclick="selectOddEven('even')">
+                    雙<br><small>02,04,06...38</small>
+                </div>
+            </div>
+            <div class="payout-info" id="oddEvenPayout" style="display:none;">賠率 1:1 (39莊家通殺)</div>
+
+            <div class="odd-even-selector" id="bigSmallSelector">
+                <div class="odd-even-btn small-btn" data-value="small" onclick="selectBigSmall('small')">
+                    小<br><small>01-19</small>
+                </div>
+                <div class="odd-even-btn big-btn" data-value="big" onclick="selectBigSmall('big')">
+                    大<br><small>20-38</small>
+                </div>
+            </div>
+            <div class="payout-info" id="bigSmallPayout" style="display:none;">賠率 1:1 (39莊家通殺)</div>
+
+            <div>
+                <label for="amount">投注金額</label>
+                <input type="number" id="amount" placeholder="輸入金額" min="100" step="100" value="1000" oninput="updateAutoBetStatus()">
+
+                <div class="quick-amounts">
+                    <div class="quick-amount" data-amount="500">500</div>
+                    <div class="quick-amount" data-amount="1000">1000</div>
+                    <div class="quick-amount" data-amount="2000">2000</div>
+                    <div class="quick-amount" data-amount="3000">3000</div>
+                    <div class="quick-amount" data-amount="5000">5000</div>
+                    <div class="quick-amount" data-amount="10000">10000</div>
+                </div>
+            </div>
+
+            <button onclick="placeBet()">確認投注</button>
+
+            <div class="auto-bet-section">
+                <label class="auto-bet-toggle">
+                    <input type="checkbox" id="autoBetToggle" onchange="toggleAutoBet()">
+                    <span class="auto-bet-label">自動投注</span>
+                </label>
+                <span class="auto-bet-status" id="autoBetStatus">未啟用</span>
+            </div>
+
+            <div id="status" class="status connecting">連線中...</div>
+
+            <button class="history-btn" onclick="showHistoryModal()">📊 查看押注記錄</button>
+        </div>
+
+        <div class="history-section">
+            <h3>
+                <span>📝 本局投注</span>
+                <button class="clear-btn" onclick="clearCurrentBets()">清除</button>
+            </h3>
+            <div class="history-list" id="currentBetsList">
+                <div class="empty-message">尚無投注</div>
+            </div>
+        </div>
+
+        <div class="history-section">
+            <h3>
+                <span>📊 開獎記錄</span>
+                <button class="clear-btn" onclick="clearResultHistory()">清除</button>
+            </h3>
+            <div class="history-list" id="resultHistoryList">
+                <div class="empty-message">尚無記錄</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 歷史記錄彈窗 -->
+    <div class="history-modal" id="historyModal">
+        <div class="history-modal-content">
+            <div class="history-modal-header">
+                <h2>📊 押注記錄</h2>
+                <button class="close-modal-btn" onclick="closeHistoryModal()">關閉</button>
+            </div>
+            <div class="history-filter">
+                <select id="historyDays" onchange="loadBetHistory()">
+                    <option value="1">今天</option>
+                    <option value="7">最近7天</option>
+                    <option value="14" selected>最近14天</option>
+                </select>
+            </div>
+            <div class="stats-summary" id="statsSummary">
+                <div class="stat-item">
+                    <div class="stat-label">總投注</div>
+                    <div class="stat-value" id="statTotalBets">0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">總金額</div>
+                    <div class="stat-value" id="statTotalAmount">$0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">勝/敗</div>
+                    <div class="stat-value" id="statWinLose">0/0</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-label">總損益</div>
+                    <div class="stat-value" id="statTotalProfit">$0</div>
+                </div>
+            </div>
+            <div class="history-list" id="betHistoryList" style="max-height: 400px;">
+                <div class="empty-message">載入中...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let mqttClient;
+        let member = null;
+        let currentBetType = 'number';
+        let selectedOddEven = null;
+        let selectedBigSmall = null;
+        let currentBets = [];
+        let resultHistory = [];
+        let autoBetEnabled = false;
+        let currentGamePhase = 'stop';
+        let autoBetExecuted = false;
+        let wasKicked = false;
+        let currentRoundNumber = null;
+
+        // MQTT 設定
+        const MQTT_BROKER = 'wss://tw5399.com:9002';
+        const CLIENT_ID = 'mobile_' + Math.random().toString(16).substr(2, 8);
+
+        // 切換投注類型
+        function switchBetType(type) {
+            currentBetType = type;
+            document.querySelectorAll('.bet-type-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.type === type);
+            });
+            document.getElementById('amount').value = '';
+
+            const numberSelector = document.getElementById('numberSelector');
+            const oddEvenSelector = document.getElementById('oddEvenSelector');
+            const oddEvenPayout = document.getElementById('oddEvenPayout');
+            const bigSmallSelector = document.getElementById('bigSmallSelector');
+            const bigSmallPayout = document.getElementById('bigSmallPayout');
+
+            numberSelector.classList.add('hide');
+            oddEvenSelector.classList.remove('show');
+            oddEvenPayout.style.display = 'none';
+            bigSmallSelector.classList.remove('show');
+            bigSmallPayout.style.display = 'none';
+
+            if (type === 'number') {
+                numberSelector.classList.remove('hide');
+            } else if (type === 'oddeven') {
+                oddEvenSelector.classList.add('show');
+                oddEvenPayout.style.display = 'block';
+            } else if (type === 'bigsmall') {
+                bigSmallSelector.classList.add('show');
+                bigSmallPayout.style.display = 'block';
+            }
+
+            updateAutoBetStatus();
+        }
+
+        function selectOddEven(value) {
+            selectedOddEven = value;
+            document.querySelectorAll('.odd-even-btn.odd, .odd-even-btn.even').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.value === value);
+            });
+            updateAutoBetStatus();
+        }
+
+        function selectBigSmall(value) {
+            selectedBigSmall = value;
+            document.querySelectorAll('.odd-even-btn.big-btn, .odd-even-btn.small-btn').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.value === value);
+            });
+            updateAutoBetStatus();
+        }
+
+        // 檢查是否已登入
+        const savedMember = localStorage.getItem('member');
+        if (!savedMember) {
+            window.location.href = '/login.html';
+        } else {
+            member = JSON.parse(savedMember);
+            document.getElementById('userName').textContent = `👤 ${member.name} (${member.username})`;
+            document.getElementById('balance').textContent = member.balance.toLocaleString();
+        }
+
+        // 生成號碼選項
+        const numberSelect = document.getElementById('number');
+        for (let i = 1; i <= 39; i++) {
+            const option = document.createElement('option');
+            option.value = i.toString().padStart(2, '0');
+            option.textContent = i.toString().padStart(2, '0');
+            numberSelect.appendChild(option);
+        }
+
+        document.getElementById('autoBetToggle').checked = false;
+        autoBetEnabled = false;
+        document.getElementById('amount').value = '';
+
+        document.querySelectorAll('.quick-amount').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.getElementById('amount').value = btn.dataset.amount;
+                updateAutoBetStatus();
+            });
+        });
+
+        // 連接 MQTT
+        function connectMQTT() {
+            showStatus('連接 MQTT 中...', 'connecting');
+
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                username: 'palee',
+                password: '888168',
+                clientId: CLIENT_ID,
+                clean: true,
+                reconnectPeriod: 3000
+            });
+
+            mqttClient.on('connect', () => {
+                console.log('MQTT 連線成功');
+                showStatus('MQTT 連線成功，登入中...', 'connecting');
+
+                // 訂閱主題
+                mqttClient.subscribe([
+                    'roulette/game/state',
+                    'roulette/game/result',
+                    'roulette/bets/update',
+                    `roulette/login/response/${CLIENT_ID}`,
+                    `roulette/bet/response/${CLIENT_ID}`,
+                    `roulette/player/result/${member.id}`,
+                    `roulette/balance/${member.id}`,
+                    `roulette/admin/query/response/${CLIENT_ID}`
+                ]);
+
+                // 通知伺服器客戶端上線
+                mqttClient.publish('roulette/client/connect', JSON.stringify({ clientId: CLIENT_ID }));
+
+                // 發送登入請求
+                mqttClient.publish('roulette/player/login', JSON.stringify({
+                    username: member.username,
+                    password: '1234',
+                    clientId: CLIENT_ID
+                }));
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    handleMQTTMessage(topic, data);
+                } catch (error) {
+                    console.error('處理訊息錯誤:', error);
+                }
+            });
+
+            mqttClient.on('error', (err) => {
+                console.error('MQTT 錯誤:', err);
+                showStatus('連線錯誤', 'error');
+            });
+
+            mqttClient.on('close', () => {
+                if (wasKicked) return;
+                showStatus('連線已斷開，3秒後重新連線...', 'error');
+            });
+
+            mqttClient.on('reconnect', () => {
+                showStatus('重新連線中...', 'connecting');
+            });
+        }
+
+        function handleMQTTMessage(topic, data) {
+            // 登入回應
+            if (topic === `roulette/login/response/${CLIENT_ID}`) {
+                if (data.success) {
+                    showStatus('登入成功！', 'success');
+                    member.balance = data.member.balance;
+                    updateBalance(member.balance);
+                } else {
+                    showStatus('登入失敗：' + data.message, 'error');
+                    wasKicked = true;
+                    mqttClient.end();
+                    localStorage.removeItem('member');
+                    setTimeout(() => {
+                        alert(data.message || '登入失敗，請重新登入');
+                        window.location.href = '/login.html';
+                    }, 500);
+                }
+                return;
+            }
+
+            // 投注回應
+            if (topic === `roulette/bet/response/${CLIENT_ID}`) {
+                if (data.success) {
+                    showStatus(`投注成功！${data.target} + $${data.amount}`, 'success');
+                    updateBalance(data.balance);
+                    addCurrentBet(data.target, data.amount);
+                } else {
+                    showStatus('錯誤：' + data.message, 'error');
+                }
+                return;
+            }
+
+            // 遊戲狀態
+            if (topic === 'roulette/game/state') {
+                updateTimerDisplay(data.phase, data.seconds);
+                if (data.roundNumber) {
+                    currentRoundNumber = data.roundNumber;
+                    document.getElementById('roundNumber').textContent = `期數: ${data.roundNumber}`;
+                }
+                return;
+            }
+
+            // 遊戲結果
+            if (topic === 'roulette/game/result') {
+                if (data.type === 'spin_wheel') {
+                    showStatus('輪盤轉動中...', 'connecting');
+                } else if (data.type === 'game_result') {
+                    // 主控端的結果
+                }
+                return;
+            }
+
+            // 個人結果
+            if (topic === `roulette/player/result/${member.id}`) {
+                showGameResult(data.winningNumber, data.profit);
+                if (data.balance !== undefined) {
+                    updateBalance(data.balance);
+                }
+                addResultHistory(data.winningNumber, data.profit);
+                updateCurrentBetsResult(data.winningNumber);
+                return;
+            }
+
+            // 餘額更新
+            if (topic === `roulette/balance/${member.id}`) {
+                updateBalance(data.balance);
+                showStatus('餘額已更新', 'success');
+                return;
+            }
+
+            // 投注更新
+            if (topic === 'roulette/bets/update') {
+                if (data.type === 'new_round') {
+                    hideGameResult();
+                    showStatus('新一局開始，開放下注！', 'success');
+                    currentBets = [];
+                    renderCurrentBets();
+                }
+                return;
+            }
+
+            // 查詢回應
+            if (topic === `roulette/admin/query/response/${CLIENT_ID}`) {
+                handleQueryResponse(data);
+                return;
+            }
+        }
+
+        function updateTimerDisplay(phase, seconds) {
+            const timerSeconds = document.getElementById('timerSeconds');
+            const timerPhase = document.getElementById('timerPhase');
+
+            if (seconds !== undefined) {
+                timerSeconds.textContent = seconds.toString().padStart(2, '0');
+            }
+
+            const oldPhase = currentGamePhase;
+            currentGamePhase = phase;
+
+            if (oldPhase !== 'betting' && phase === 'betting') {
+                autoBetExecuted = false;
+                updateAutoBetStatus();
+            }
+
+            if (phase === 'betting' && seconds >= 46 && seconds <= 50) {
+                executeAutoBet();
+            }
+
+            timerPhase.className = 'timer-phase ' + phase;
+            if (phase === 'betting') {
+                timerPhase.textContent = '開放下注';
+                if (oldPhase !== phase) showStatus('投注期 - 開放下注', 'success');
+            } else if (phase === 'stop') {
+                timerPhase.textContent = '結算中';
+                if (oldPhase !== phase) showStatus('停止期 - 結算中', 'connecting');
+            } else if (phase === 'spinning') {
+                timerPhase.textContent = '停止下注';
+                if (oldPhase !== phase) showStatus('旋轉期 - 停止下注', 'connecting');
+            }
+        }
+
+        function placeBet() {
+            const amount = parseInt(document.getElementById('amount').value);
+
+            if (!amount || amount < 100) {
+                showStatus('請輸入有效金額（最少100）', 'error');
+                return;
+            }
+
+            if (amount > member.balance) {
+                showStatus('餘額不足！', 'error');
+                return;
+            }
+
+            if (mqttClient && mqttClient.connected) {
+                let target;
+                if (currentBetType === 'number') {
+                    target = document.getElementById('number').value;
+                } else if (currentBetType === 'oddeven') {
+                    if (!selectedOddEven) {
+                        showStatus('請選擇單或雙', 'error');
+                        return;
+                    }
+                    target = selectedOddEven;
+                } else if (currentBetType === 'bigsmall') {
+                    if (!selectedBigSmall) {
+                        showStatus('請選擇大或小', 'error');
+                        return;
+                    }
+                    target = selectedBigSmall;
+                }
+
+                mqttClient.publish('roulette/player/bet', JSON.stringify({
+                    memberId: member.id,
+                    betType: currentBetType,
+                    target: target,
+                    amount: amount,
+                    clientId: CLIENT_ID
+                }));
+
+                showStatus('投注中...', 'connecting');
+            } else {
+                showStatus('連線中斷，請稍後再試', 'error');
+            }
+        }
+
+        function updateBalance(newBalance) {
+            member.balance = newBalance;
+            document.getElementById('balance').textContent = newBalance.toLocaleString();
+            localStorage.setItem('member', JSON.stringify(member));
+        }
+
+        function logout() {
+            if (confirm('確定要登出嗎？')) {
+                sendDisconnect();
+                localStorage.removeItem('member');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // 發送斷線通知
+        function sendDisconnect() {
+            if (mqttClient && member) {
+                mqttClient.publish('roulette/client/disconnect', JSON.stringify({
+                    memberId: member.id,
+                    clientId: CLIENT_ID
+                }));
+                mqttClient.end();
+            }
+        }
+
+        // 網頁關閉或刷新時發送斷線通知並清除登入資料
+        window.addEventListener('beforeunload', function(e) {
+            sendDisconnect();
+            // 清除 localStorage，避免重新開啟時自動登入
+            localStorage.removeItem('member');
+        });
+
+        // 使用 navigator.sendBeacon 確保斷線訊息能發送（備用方案）
+        window.addEventListener('unload', function(e) {
+            if (member) {
+                // 使用 sendBeacon 發送斷線通知到伺服器
+                navigator.sendBeacon('/api/disconnect', JSON.stringify({
+                    memberId: member.id,
+                    clientId: CLIENT_ID
+                }));
+                // 再次確保清除 localStorage
+                localStorage.removeItem('member');
+            }
+        });
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+        }
+
+        function toggleAutoBet() {
+            autoBetEnabled = document.getElementById('autoBetToggle').checked;
+            if (autoBetEnabled) {
+                showStatus('自動投注已啟用', 'success');
+            } else {
+                showStatus('自動投注已關閉', 'connecting');
+            }
+            updateAutoBetStatus();
+        }
+
+        function getCurrentBetTarget() {
+            if (currentBetType === 'number') {
+                return { type: 'number', target: document.getElementById('number').value };
+            } else if (currentBetType === 'oddeven') {
+                if (selectedOddEven) {
+                    return { type: 'oddeven', target: selectedOddEven };
+                }
+            } else if (currentBetType === 'bigsmall') {
+                if (selectedBigSmall) {
+                    return { type: 'bigsmall', target: selectedBigSmall };
+                }
+            }
+            return null;
+        }
+
+        function updateAutoBetStatus() {
+            const statusEl = document.getElementById('autoBetStatus');
+            const toggleEl = document.getElementById('autoBetToggle');
+            const toggleLabel = toggleEl.parentElement;
+
+            const currentAmount = parseInt(document.getElementById('amount').value) || 0;
+            const currentTarget = getCurrentBetTarget();
+            const canAutoBet = currentAmount >= 100 && currentTarget !== null;
+
+            if (canAutoBet || autoBetEnabled) {
+                toggleEl.disabled = false;
+                toggleLabel.classList.remove('disabled');
+            } else {
+                toggleEl.disabled = true;
+                toggleLabel.classList.add('disabled');
+            }
+
+            if (!autoBetEnabled) {
+                statusEl.textContent = '未啟用';
+                statusEl.className = 'auto-bet-status';
+            } else {
+                let targetText = '';
+                if (currentTarget) {
+                    if (currentTarget.type === 'number') {
+                        targetText = `號碼 ${currentTarget.target}`;
+                    } else if (currentTarget.type === 'oddeven') {
+                        targetText = currentTarget.target === 'odd' ? '單' : '雙';
+                    } else if (currentTarget.type === 'bigsmall') {
+                        targetText = currentTarget.target === 'big' ? '大' : '小';
+                    }
+                    statusEl.textContent = `${targetText} $${currentAmount}`;
+                    statusEl.className = 'auto-bet-status active';
+                } else {
+                    statusEl.textContent = '請選擇投注';
+                    statusEl.className = 'auto-bet-status';
+                }
+            }
+        }
+
+        function executeAutoBet() {
+            const toggleChecked = document.getElementById('autoBetToggle').checked;
+            if (!autoBetEnabled || !toggleChecked) return;
+            if (autoBetExecuted) return;
+            if (!mqttClient || !mqttClient.connected) return;
+
+            const currentTarget = getCurrentBetTarget();
+            if (!currentTarget) {
+                showStatus('自動投注失敗：請選擇投注目標', 'error');
+                return;
+            }
+
+            const currentAmount = parseInt(document.getElementById('amount').value) || 0;
+            if (currentAmount < 100) {
+                showStatus('自動投注失敗：金額不足100', 'error');
+                return;
+            }
+
+            if (member.balance < currentAmount) {
+                showStatus('自動投注失敗：餘額不足', 'error');
+                return;
+            }
+
+            autoBetExecuted = true;
+
+            mqttClient.publish('roulette/player/bet', JSON.stringify({
+                memberId: member.id,
+                betType: currentTarget.type,
+                target: currentTarget.target,
+                amount: currentAmount,
+                clientId: CLIENT_ID
+            }));
+
+            let targetText = '';
+            if (currentTarget.type === 'number') {
+                targetText = `號碼 ${currentTarget.target}`;
+            } else if (currentTarget.type === 'oddeven') {
+                targetText = currentTarget.target === 'odd' ? '單' : '雙';
+            } else if (currentTarget.type === 'bigsmall') {
+                targetText = currentTarget.target === 'big' ? '大' : '小';
+            }
+
+            showStatus(`自動投注: ${targetText} $${currentAmount}`, 'success');
+        }
+
+        function showGameResult(winningNumber, profit) {
+            const resultDisplay = document.getElementById('resultDisplay');
+            const resultNumber = document.getElementById('resultNumber');
+            const resultProfit = document.getElementById('resultProfit');
+
+            resultNumber.textContent = winningNumber;
+
+            const num = parseInt(winningNumber);
+            // 輪盤扇區顏色：n % 3: 0=blue, 1=green, 2=red
+            const colorIndex = num % 3;
+            resultNumber.className = 'result-number';
+            if (colorIndex === 0) resultNumber.classList.add('blue');      // 3,6,9,12,15,18...
+            else if (colorIndex === 1) resultNumber.classList.add('green'); // 1,4,7,10,13,16...
+            else resultNumber.classList.add('red');                         // 2,5,8,11,14,17...
+
+            if (profit > 0) {
+                resultProfit.textContent = `+$${profit.toLocaleString()}`;
+                resultProfit.className = 'result-profit win';
+            } else if (profit < 0) {
+                resultProfit.textContent = `-$${Math.abs(profit).toLocaleString()}`;
+                resultProfit.className = 'result-profit lose';
+            } else {
+                resultProfit.textContent = '$0';
+                resultProfit.className = 'result-profit none';
+            }
+
+            resultDisplay.classList.add('show');
+        }
+
+        function hideGameResult() {
+            const resultDisplay = document.getElementById('resultDisplay');
+            resultDisplay.classList.remove('show');
+        }
+
+        function addCurrentBet(target, amount) {
+            currentBets.push({ target, amount, result: 'pending' });
+            renderCurrentBets();
+        }
+
+        function updateCurrentBetsResult(winningNumber) {
+            const winNum = parseInt(winningNumber);
+            const isOdd = winNum % 2 === 1;
+            const isBig = winNum >= 20 && winNum <= 38;
+            const isSmall = winNum >= 1 && winNum <= 19;
+
+            currentBets.forEach(bet => {
+                if (bet.target === winningNumber) {
+                    bet.result = 'win';
+                } else if (winNum === 39 && (bet.target === '單' || bet.target === '雙' || bet.target === '大' || bet.target === '小')) {
+                    bet.result = 'lose';
+                } else if (bet.target === '單' && isOdd && winNum !== 39) {
+                    bet.result = 'win';
+                } else if (bet.target === '雙' && !isOdd) {
+                    bet.result = 'win';
+                } else if (bet.target === '大' && isBig) {
+                    bet.result = 'win';
+                } else if (bet.target === '小' && isSmall) {
+                    bet.result = 'win';
+                } else {
+                    bet.result = 'lose';
+                }
+            });
+            renderCurrentBets();
+        }
+
+        function renderCurrentBets() {
+            const list = document.getElementById('currentBetsList');
+            if (currentBets.length === 0) {
+                list.innerHTML = '<div class="empty-message">尚無投注</div>';
+                return;
+            }
+
+            list.innerHTML = currentBets.map(bet => {
+                let resultText = '';
+                let resultClass = 'pending';
+                if (bet.result === 'win') {
+                    resultText = '中獎';
+                    resultClass = 'win';
+                } else if (bet.result === 'lose') {
+                    resultText = '未中';
+                    resultClass = 'lose';
+                } else {
+                    resultText = '等待開獎';
+                }
+
+                return `
+                    <div class="history-item">
+                        <div class="bet-info">
+                            <span class="bet-target">${bet.target}</span>
+                            <span class="bet-amount">$${bet.amount.toLocaleString()}</span>
+                        </div>
+                        <span class="bet-result ${resultClass}">${resultText}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function addResultHistory(winningNumber, profit) {
+            resultHistory.unshift({
+                number: winningNumber,
+                profit: profit,
+                time: new Date().toLocaleTimeString('zh-TW', { hour: '2-digit', minute: '2-digit' })
+            });
+            if (resultHistory.length > 20) {
+                resultHistory.pop();
+            }
+            renderResultHistory();
+        }
+
+        function renderResultHistory() {
+            const list = document.getElementById('resultHistoryList');
+            if (resultHistory.length === 0) {
+                list.innerHTML = '<div class="empty-message">尚無記錄</div>';
+                return;
+            }
+
+            list.innerHTML = resultHistory.map(result => {
+                const num = parseInt(result.number);
+                // 輪盤扇區顏色：1=綠, 2=紅, 3=藍, 4=綠, 5=紅, 6=藍...
+                const colorIndex = num % 3;
+                let colorClass;
+                if (colorIndex === 0) colorClass = 'blue';   // 3,6,9,12,15,18...
+                else if (colorIndex === 1) colorClass = 'green'; // 1,4,7,10,13,16...
+                else colorClass = 'red';   // 2,5,8,11,14,17...
+
+                let profitText = '$0';
+                let profitClass = 'none';
+                if (result.profit > 0) {
+                    profitText = `+$${result.profit.toLocaleString()}`;
+                    profitClass = 'win';
+                } else if (result.profit < 0) {
+                    profitText = `-$${Math.abs(result.profit).toLocaleString()}`;
+                    profitClass = 'lose';
+                }
+
+                return `
+                    <div class="result-history-item">
+                        <div class="winning-num ${colorClass}">${result.number}</div>
+                        <span style="color: #868e96; font-size: 12px;">${result.time}</span>
+                        <span class="result-profit ${profitClass}">${profitText}</span>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function clearCurrentBets() {
+            currentBets = [];
+            renderCurrentBets();
+        }
+
+        function clearResultHistory() {
+            resultHistory = [];
+            renderResultHistory();
+        }
+
+        // 歷史記錄彈窗
+        function showHistoryModal() {
+            document.getElementById('historyModal').classList.add('show');
+            loadBetHistory();
+        }
+
+        function closeHistoryModal() {
+            document.getElementById('historyModal').classList.remove('show');
+        }
+
+        let pendingQueryCallback = null;
+
+        function loadBetHistory() {
+            const days = parseInt(document.getElementById('historyDays').value);
+
+            pendingQueryCallback = 'memberBetRecords';
+
+            mqttClient.publish('roulette/admin/query', JSON.stringify({
+                queryType: 'memberBetRecords',
+                params: { memberId: member.id, days: days },
+                requestId: CLIENT_ID
+            }));
+
+            // 同時查詢統計
+            setTimeout(() => {
+                mqttClient.publish('roulette/admin/query', JSON.stringify({
+                    queryType: 'memberStats',
+                    params: { memberId: member.id, days: days },
+                    requestId: CLIENT_ID
+                }));
+            }, 100);
+        }
+
+        function handleQueryResponse(data) {
+            if (Array.isArray(data)) {
+                // 押注記錄
+                renderBetHistory(data);
+            } else if (data.totalBets !== undefined) {
+                // 統計資料
+                document.getElementById('statTotalBets').textContent = data.totalBets;
+                document.getElementById('statTotalAmount').textContent = '$' + data.totalAmount.toLocaleString();
+                document.getElementById('statWinLose').textContent = `${data.winCount}/${data.loseCount}`;
+                const profitEl = document.getElementById('statTotalProfit');
+                profitEl.textContent = (data.totalProfit >= 0 ? '+' : '') + '$' + data.totalProfit.toLocaleString();
+                profitEl.className = 'stat-value ' + (data.totalProfit >= 0 ? 'positive' : 'negative');
+            }
+        }
+
+        function renderBetHistory(records) {
+            const list = document.getElementById('betHistoryList');
+
+            if (records.length === 0) {
+                list.innerHTML = '<div class="empty-message">尚無記錄</div>';
+                return;
+            }
+
+            list.innerHTML = records.map(record => {
+                let targetText = record.bet_target;
+                if (record.bet_type === 'oddeven') {
+                    targetText = record.bet_target === 'odd' ? '單' : '雙';
+                } else if (record.bet_type === 'bigsmall') {
+                    targetText = record.bet_target === 'big' ? '大' : '小';
+                }
+
+                let profitText = '--';
+                let profitClass = 'none';
+                if (record.profit !== null) {
+                    if (record.profit > 0) {
+                        profitText = `+$${record.profit.toLocaleString()}`;
+                        profitClass = 'win';
+                    } else if (record.profit < 0) {
+                        profitText = `-$${Math.abs(record.profit).toLocaleString()}`;
+                        profitClass = 'lose';
+                    } else {
+                        profitText = '$0';
+                    }
+                }
+
+                const date = new Date(record.created_at).toLocaleString('zh-TW', {
+                    month: '2-digit',
+                    day: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                return `
+                    <div class="history-item">
+                        <div class="bet-info">
+                            <span style="font-size: 10px; color: #868e96;">${record.round_number}</span>
+                            <span class="bet-target">${targetText}</span>
+                            <span class="bet-amount">$${record.amount.toLocaleString()}</span>
+                        </div>
+                        <div style="text-align: right;">
+                            <div class="bet-result ${profitClass}">${profitText}</div>
+                            <div style="font-size: 10px; color: #868e96;">${record.winning_number || '--'}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // 啟動 MQTT 連線
+        connectMQTT();
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+{
+  "name": "roulettist",
+  "version": "1.0.0",
+  "description": "輪盤遊戲 - 支援手機投注",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "mqtt": "^5.14.1",
+    "mysql2": "^3.16.0",
+    "qrcode": "^1.5.3",
+    "ws": "^8.14.2"
+  }
+}
