@@ -3,7 +3,7 @@ const mysql = require('mysql2/promise');
 
 // MySQL 連線設定
 const dbConfig = {
-    host: 'localhost',
+    host: '127.0.0.1',
     user: 'root',
     password: 'win16888@',
     database: 'roulettist',
