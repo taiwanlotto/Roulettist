@@ -618,6 +618,57 @@
             display: block;
         }
 
+        /* 音量控制 */
+        .sound-control {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 8px 12px;
+            border-radius: 25px;
+            color: white;
+        }
+
+        .sound-btn {
+            background: none;
+            border: none;
+            color: white;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 5px;
+        }
+
+        .sound-slider {
+            width: 80px;
+            height: 6px;
+            -webkit-appearance: none;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+            outline: none;
+        }
+
+        .sound-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            background: #51cf66;
+            border-radius: 50%;
+            cursor: pointer;
+        }
+
+        .sound-slider::-moz-range-thumb {
+            width: 16px;
+            height: 16px;
+            background: #51cf66;
+            border-radius: 50%;
+            cursor: pointer;
+            border: none;
+        }
+
         .history-modal-content {
             background: white;
             margin: 20px auto;
@@ -1159,7 +1210,11 @@
                 if (oldPhase !== phase) showStatus('停止期 - 結算中', 'connecting');
             } else if (phase === 'spinning') {
                 timerPhase.textContent = '停止下注';
-                if (oldPhase !== phase) showStatus('旋轉期 - 停止下注', 'connecting');
+                if (oldPhase !== phase) {
+                    showStatus('旋轉期 - 停止下注', 'connecting');
+                    // 播放輪盤滾動音效
+                    createSpinningSound();
+                }
             }
         }
 
@@ -1402,6 +1457,8 @@
             if (profit > 0) {
                 resultProfit.textContent = `+$${profit.toLocaleString()}`;
                 resultProfit.className = 'result-profit win';
+                // 播放中獎音效
+                playWinSound();
             } else if (profit < 0) {
                 resultProfit.textContent = `-$${Math.abs(profit).toLocaleString()}`;
                 resultProfit.className = 'result-profit lose';
@@ -1658,8 +1715,229 @@
             }).join('');
         }
 
+        // ===== 輪盤音效系統 =====
+        let soundEnabled = true;
+        let soundVolume = parseFloat(localStorage.getItem('soundVolume') || '0.5');
+        let spinningSound = null;
+        let audioContext = null;
+
+        // 初始化音效控制 UI
+        function initSoundControl() {
+            const slider = document.getElementById('volumeSlider');
+            const btn = document.getElementById('soundToggle');
+
+            // 載入儲存的設定
+            const savedEnabled = localStorage.getItem('soundEnabled');
+            soundEnabled = savedEnabled === null ? true : savedEnabled === 'true';
+
+            slider.value = soundVolume * 100;
+            updateSoundIcon();
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            localStorage.setItem('soundEnabled', soundEnabled);
+            updateSoundIcon();
+
+            if (!soundEnabled && spinningSound) {
+                stopSpinningSound();
+            }
+        }
+
+        function updateVolume(value) {
+            soundVolume = value / 100;
+            localStorage.setItem('soundVolume', soundVolume);
+            updateSoundIcon();
+
+            if (spinningSound) {
+                spinningSound.volume = soundVolume;
+            }
+        }
+
+        function updateSoundIcon() {
+            const btn = document.getElementById('soundToggle');
+            if (!soundEnabled || soundVolume === 0) {
+                btn.textContent = '🔇';
+            } else if (soundVolume < 0.5) {
+                btn.textContent = '🔉';
+            } else {
+                btn.textContent = '🔊';
+            }
+        }
+
+        // 使用 Web Audio API 生成輪盤滾動聲
+        function createSpinningSound() {
+            if (!soundEnabled || soundVolume === 0) return;
+
+            try {
+                // 建立或復用 AudioContext
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+
+                // 確保 AudioContext 運行中
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+
+                // 創建主節點
+                const masterGain = audioContext.createGain();
+                masterGain.gain.value = soundVolume * 0.3;
+                masterGain.connect(audioContext.destination);
+
+                // 輪盤珠子滾動的節奏聲（模擬珠子經過格子的聲音）
+                let tickInterval;
+                let tickRate = 50; // 初始間隔 (ms)
+                const startTime = Date.now();
+                const duration = 8000; // 8秒
+
+                function playTick() {
+                    const elapsed = Date.now() - startTime;
+                    if (elapsed > duration) {
+                        clearInterval(tickInterval);
+                        return;
+                    }
+
+                    // 創建短促的滴答聲
+                    const osc = audioContext.createOscillator();
+                    const tickGain = audioContext.createGain();
+
+                    // 隨機輕微變化頻率，模擬真實感
+                    osc.frequency.value = 800 + Math.random() * 400;
+                    osc.type = 'sine';
+
+                    tickGain.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    tickGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.05);
+
+                    osc.connect(tickGain);
+                    tickGain.connect(masterGain);
+
+                    osc.start();
+                    osc.stop(audioContext.currentTime + 0.05);
+
+                    // 隨時間逐漸減慢（模擬輪盤減速）
+                    const progress = elapsed / duration;
+                    const newRate = 50 + progress * 300; // 從快到慢
+
+                    if (newRate !== tickRate && elapsed < duration - 500) {
+                        tickRate = newRate;
+                        clearInterval(tickInterval);
+                        tickInterval = setInterval(playTick, tickRate);
+                    }
+                }
+
+                tickInterval = setInterval(playTick, tickRate);
+
+                // 底層的滾動聲（白噪音過濾）
+                const bufferSize = audioContext.sampleRate * 2;
+                const noiseBuffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
+                const output = noiseBuffer.getChannelData(0);
+                for (let i = 0; i < bufferSize; i++) {
+                    output[i] = Math.random() * 2 - 1;
+                }
+
+                const noise = audioContext.createBufferSource();
+                noise.buffer = noiseBuffer;
+                noise.loop = true;
+
+                const noiseFilter = audioContext.createBiquadFilter();
+                noiseFilter.type = 'bandpass';
+                noiseFilter.frequency.value = 300;
+                noiseFilter.Q.value = 1;
+
+                const noiseGain = audioContext.createGain();
+                noiseGain.gain.setValueAtTime(0.15, audioContext.currentTime);
+
+                // 8秒後淡出
+                noiseGain.gain.setValueAtTime(0.15, audioContext.currentTime + 7);
+                noiseGain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + 8);
+
+                noise.connect(noiseFilter);
+                noiseFilter.connect(noiseGain);
+                noiseGain.connect(masterGain);
+
+                noise.start();
+                noise.stop(audioContext.currentTime + 8);
+
+                // 儲存引用以便停止
+                spinningSound = {
+                    tickInterval,
+                    noise,
+                    masterGain,
+                    stop: function() {
+                        clearInterval(this.tickInterval);
+                        try {
+                            this.noise.stop();
+                        } catch(e) {}
+                    }
+                };
+
+                // 8秒後自動清理
+                setTimeout(() => {
+                    if (spinningSound) {
+                        clearInterval(spinningSound.tickInterval);
+                        spinningSound = null;
+                    }
+                }, 8500);
+
+            } catch (e) {
+                console.log('音效播放失敗:', e);
+            }
+        }
+
+        function stopSpinningSound() {
+            if (spinningSound) {
+                spinningSound.stop();
+                spinningSound = null;
+            }
+        }
+
+        // 播放中獎音效
+        function playWinSound() {
+            if (!soundEnabled || soundVolume === 0) return;
+
+            try {
+                if (!audioContext) {
+                    audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioContext.state === 'suspended') {
+                    audioContext.resume();
+                }
+
+                const gain = audioContext.createGain();
+                gain.gain.value = soundVolume * 0.4;
+                gain.connect(audioContext.destination);
+
+                // 上升的音階
+                [523, 659, 784, 1047].forEach((freq, i) => {
+                    const osc = audioContext.createOscillator();
+                    const oscGain = audioContext.createGain();
+                    osc.frequency.value = freq;
+                    osc.type = 'sine';
+                    oscGain.gain.setValueAtTime(0.5, audioContext.currentTime + i * 0.1);
+                    oscGain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + i * 0.1 + 0.3);
+                    osc.connect(oscGain);
+                    oscGain.connect(gain);
+                    osc.start(audioContext.currentTime + i * 0.1);
+                    osc.stop(audioContext.currentTime + i * 0.1 + 0.3);
+                });
+            } catch(e) {}
+        }
+
+        // 初始化音效
+        document.addEventListener('DOMContentLoaded', initSoundControl);
+
         // 啟動 MQTT 連線
         connectMQTT();
     </script>
+
+    <!-- 音量控制 -->
+    <div class="sound-control">
+        <button class="sound-btn" id="soundToggle" onclick="toggleSound()">🔊</button>
+        <input type="range" class="sound-slider" id="volumeSlider"
+               min="0" max="100" value="50"
+               onchange="updateVolume(this.value)"
+               oninput="updateVolume(this.value)">
+    </div>
 </body>
 </html>
