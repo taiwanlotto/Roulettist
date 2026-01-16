@@ -316,7 +316,9 @@
             </div>
             <div class="summary-item">
                 <div class="label">上局開獎</div>
-                <div class="value" id="lastNumber">--</div>
+                <div id="lastNumberBall" style="display:flex; justify-content:center; align-items:center;">
+                    <div class="number-ball" id="lastNumber" style="width:60px; height:60px; border-radius:50%; display:flex; justify-content:center; align-items:center; font-size:24px; font-weight:bold; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.5); box-shadow: inset -3px -3px 8px rgba(0,0,0,0.3), inset 3px 3px 8px rgba(255,255,255,0.2), 0 4px 8px rgba(0,0,0,0.3);">--</div>
+                </div>
             </div>
         </div>
 
@@ -334,6 +336,14 @@
                         <tr><td>大 (20-38)</td><td id="bigTotal">$0</td></tr>
                         <tr><td>小 (1-19)</td><td id="smallTotal">$0</td></tr>
                     </table>
+                    <h3 style="color:#90EE90; margin:15px 0 10px;">顏色投注 (1賠1.8)</h3>
+                    <table>
+                        <tr><td><span style="color:#DC143C;">紅</span> (2,5,8,11,14...)</td><td id="redTotal">$0</td></tr>
+                        <tr><td><span style="color:#4169E1;">藍</span> (3,6,9,12,15...)</td><td id="blueTotal">$0</td></tr>
+                        <tr><td><span style="color:#228B22;">綠</span> (1,4,7,10,13...)</td><td id="greenTotal">$0</td></tr>
+                    </table>
+                    <h3 style="color:#90EE90; margin:15px 0 10px;">號碼投注分布</h3>
+                    <div id="numberBetsGrid" style="display:grid; grid-template-columns:repeat(10, 1fr); gap:4px; font-size:11px;"></div>
                 </div>
             </div>
 
@@ -502,12 +512,18 @@
         let bets = {};
         let oddEvenBets = { odd: { total: 0, players: [] }, even: { total: 0, players: [] } };
         let bigSmallBets = { big: { total: 0, players: [] }, small: { total: 0, players: [] } };
+        let colorBets = { red: { total: 0, players: [] }, blue: { total: 0, players: [] }, green: { total: 0, players: [] } };
         let onlinePlayers = new Set();
         let allMembers = [];
         let lastWinningNumber = null;
 
         const MQTT_BROKER = 'wss://tw5399.com:9002';
         const CLIENT_ID = 'admin_' + Math.random().toString(16).substr(2, 8);
+
+        // 頻道設定（由伺服器注入）
+        const CHANNEL_ID = window.CHANNEL_ID || 'local';
+        const CHANNEL_PREFIX = `roulette/${CHANNEL_ID}`;
+        console.log('系統頻道:', CHANNEL_ID);
 
         // 切換分頁
         function switchTab(tabId) {
@@ -539,15 +555,15 @@
                 document.getElementById('connectionText').textContent = 'MQTT 已連線';
 
                 mqttClient.subscribe([
-                    'roulette/game/state',
-                    'roulette/game/result',
-                    'roulette/bets/update',
-                    'roulette/admin/data',
-                    `roulette/admin/query/response/${CLIENT_ID}`,
-                    `roulette/admin/recharge/response/${CLIENT_ID}`
+                    `${CHANNEL_PREFIX}/game/state`,
+                    `${CHANNEL_PREFIX}/game/result`,
+                    `${CHANNEL_PREFIX}/bets/update`,
+                    `${CHANNEL_PREFIX}/admin/data`,
+                    `${CHANNEL_PREFIX}/admin/query/response/${CLIENT_ID}`,
+                    `${CHANNEL_PREFIX}/admin/recharge/response/${CLIENT_ID}`
                 ]);
 
-                mqttClient.publish('roulette/client/connect', JSON.stringify({ clientId: CLIENT_ID, type: 'admin' }));
+                mqttClient.publish(`${CHANNEL_PREFIX}/client/connect`, JSON.stringify({ clientId: CLIENT_ID, type: 'admin' }));
             });
 
             mqttClient.on('message', (topic, message) => {
@@ -566,7 +582,7 @@
         }
 
         function handleMessage(topic, data) {
-            if (topic === 'roulette/game/state') {
+            if (topic === `${CHANNEL_PREFIX}/game/state`) {
                 updatePhaseDisplay(data.phase, data.seconds);
                 if (data.roundNumber) {
                     document.getElementById('roundNumber').textContent = data.roundNumber;
@@ -574,18 +590,19 @@
                 return;
             }
 
-            if (topic === 'roulette/game/result') {
+            if (topic === `${CHANNEL_PREFIX}/game/result`) {
                 if (data.type === 'game_result' && data.result) {
                     lastWinningNumber = data.result.winningNumber;
-                    document.getElementById('lastNumber').textContent = lastWinningNumber;
+                    updateLastNumberBall(lastWinningNumber);
                 }
                 return;
             }
 
-            if (topic === 'roulette/bets/update' || topic === 'roulette/admin/data') {
+            if (topic === `${CHANNEL_PREFIX}/bets/update` || topic === `${CHANNEL_PREFIX}/admin/data`) {
                 if (data.bets) bets = data.bets;
                 if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
                 if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
+                if (data.colorBets) colorBets = data.colorBets;
                 if (data.members) {
                     allMembers = data.members;
                     updateMemberSelect();
@@ -598,12 +615,12 @@
                 return;
             }
 
-            if (topic === `roulette/admin/query/response/${CLIENT_ID}`) {
+            if (topic === `${CHANNEL_PREFIX}/admin/query/response/${CLIENT_ID}`) {
                 handleQueryResponse(data);
                 return;
             }
 
-            if (topic === `roulette/admin/recharge/response/${CLIENT_ID}`) {
+            if (topic === `${CHANNEL_PREFIX}/admin/recharge/response/${CLIENT_ID}`) {
                 handleRechargeResponse(data);
                 return;
             }
@@ -619,6 +636,29 @@
             if (seconds !== undefined) timerElement.textContent = seconds;
         }
 
+        function updateLastNumberBall(num) {
+            const ball = document.getElementById('lastNumber');
+            ball.textContent = num;
+
+            // 根據號碼設定顏色（0=藍, 1=綠, 2=紅）
+            const n = parseInt(num);
+            const colorIndex = n % 3;
+            let bgColor;
+            if (colorIndex === 0) bgColor = '#4169E1'; // 藍 (3,6,9,12...)
+            else if (colorIndex === 1) bgColor = '#228B22'; // 綠 (1,4,7,10...)
+            else bgColor = '#DC143C'; // 紅 (2,5,8,11,14...)
+
+            ball.style.background = `radial-gradient(circle at 30% 30%, ${bgColor}, ${adjustColor(bgColor, -40)})`;
+        }
+
+        function adjustColor(hex, amount) {
+            const num = parseInt(hex.slice(1), 16);
+            const r = Math.min(255, Math.max(0, (num >> 16) + amount));
+            const g = Math.min(255, Math.max(0, ((num >> 8) & 0x00FF) + amount));
+            const b = Math.min(255, Math.max(0, (num & 0x0000FF) + amount));
+            return '#' + (0x1000000 + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        }
+
         function updateBetsDisplay() {
             let totalAmount = 0;
             let playerSet = new Set();
@@ -632,17 +672,56 @@
             document.getElementById('evenTotal').textContent = '$' + oddEvenBets.even.total.toLocaleString();
             document.getElementById('bigTotal').textContent = '$' + bigSmallBets.big.total.toLocaleString();
             document.getElementById('smallTotal').textContent = '$' + bigSmallBets.small.total.toLocaleString();
+            document.getElementById('redTotal').textContent = '$' + colorBets.red.total.toLocaleString();
+            document.getElementById('blueTotal').textContent = '$' + colorBets.blue.total.toLocaleString();
+            document.getElementById('greenTotal').textContent = '$' + colorBets.green.total.toLocaleString();
 
             totalAmount += oddEvenBets.odd.total + oddEvenBets.even.total;
             totalAmount += bigSmallBets.big.total + bigSmallBets.small.total;
+            totalAmount += colorBets.red.total + colorBets.blue.total + colorBets.green.total;
 
             oddEvenBets.odd.players.forEach(p => playerSet.add(p.id));
             oddEvenBets.even.players.forEach(p => playerSet.add(p.id));
             bigSmallBets.big.players.forEach(p => playerSet.add(p.id));
             bigSmallBets.small.players.forEach(p => playerSet.add(p.id));
+            colorBets.red.players.forEach(p => playerSet.add(p.id));
+            colorBets.blue.players.forEach(p => playerSet.add(p.id));
+            colorBets.green.players.forEach(p => playerSet.add(p.id));
 
             document.getElementById('totalBets').textContent = '$' + totalAmount.toLocaleString();
             document.getElementById('totalPlayers').textContent = playerSet.size;
+
+            // 號碼投注分布（立體球效果）
+            const grid = document.getElementById('numberBetsGrid');
+            let gridHtml = '';
+            const colors = ['#4169E1', '#228B22', '#DC143C']; // 藍、綠、紅
+            const darkColors = ['#2a4a9e', '#166b16', '#a01030']; // 暗色版本
+            for (let i = 1; i <= 39; i++) {
+                const num = i.toString().padStart(2, '0');
+                const betData = bets[num] || { total: 0, players: [] };
+                const colorIndex = i % 3;
+                const hasBet = betData.total > 0;
+                const baseColor = colors[colorIndex];
+                const darkColor = darkColors[colorIndex];
+                const ballStyle = hasBet
+                    ? `background: radial-gradient(circle at 30% 30%, ${lightenColor(baseColor, 30)}, ${baseColor} 50%, ${darkColor}); box-shadow: inset -2px -2px 6px rgba(0,0,0,0.4), inset 2px 2px 6px rgba(255,255,255,0.3), 0 3px 6px rgba(0,0,0,0.4), 0 0 10px ${baseColor}80;`
+                    : `background: radial-gradient(circle at 30% 30%, #555, #333 50%, #1a1a1a); box-shadow: inset -2px -2px 4px rgba(0,0,0,0.3), inset 1px 1px 3px rgba(255,255,255,0.1);`;
+                const border = hasBet ? '2px solid #FFD700' : '1px solid #444';
+                gridHtml += `<div style="display:flex; flex-direction:column; align-items:center; padding:4px;">
+                    <div style="width:32px; height:32px; border-radius:50%; ${ballStyle} border:${border}; display:flex; justify-content:center; align-items:center; font-weight:bold; font-size:11px; color:#fff; text-shadow:1px 1px 2px rgba(0,0,0,0.8);">${num}</div>
+                    <div style="color:${hasBet ? '#FFD700' : '#666'}; font-size:9px; margin-top:2px;">${hasBet ? '$' + betData.total.toLocaleString() : '-'}</div>
+                </div>`;
+            }
+            grid.innerHTML = gridHtml;
+        }
+
+        function lightenColor(hex, percent) {
+            const num = parseInt(hex.slice(1), 16);
+            const amt = Math.round(2.55 * percent);
+            const R = Math.min(255, (num >> 16) + amt);
+            const G = Math.min(255, ((num >> 8) & 0x00FF) + amt);
+            const B = Math.min(255, (num & 0x0000FF) + amt);
+            return '#' + (0x1000000 + (R << 16) + (G << 8) + B).toString(16).slice(1);
         }
 
         function updateMemberTable() {
@@ -690,7 +769,7 @@
                 return;
             }
 
-            mqttClient.publish('roulette/admin/recharge', JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/admin/recharge`, JSON.stringify({
                 memberId: parseInt(memberId),
                 amount: amount,
                 operator: 'admin',
@@ -725,7 +804,7 @@
 
             pendingQueryType = 'betRecords';
 
-            mqttClient.publish('roulette/admin/query', JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/admin/query`, JSON.stringify({
                 queryType: memberId ? 'memberBetRecords' : 'betRecords',
                 params: { days: parseInt(days), memberId: memberId ? parseInt(memberId) : null },
                 requestId: CLIENT_ID
@@ -736,7 +815,7 @@
             const days = document.getElementById('rechargeFilterDays').value;
             pendingQueryType = 'rechargeRecords';
 
-            mqttClient.publish('roulette/admin/query', JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/admin/query`, JSON.stringify({
                 queryType: 'rechargeRecords',
                 params: { days: parseInt(days) },
                 requestId: CLIENT_ID
@@ -747,14 +826,14 @@
             const days = document.getElementById('statsFilterDays').value;
             pendingQueryType = 'stats';
 
-            mqttClient.publish('roulette/admin/query', JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/admin/query`, JSON.stringify({
                 queryType: 'systemStats',
                 params: { days: parseInt(days) },
                 requestId: CLIENT_ID
             }));
 
             setTimeout(() => {
-                mqttClient.publish('roulette/admin/query', JSON.stringify({
+                mqttClient.publish(`${CHANNEL_PREFIX}/admin/query`, JSON.stringify({
                     queryType: 'gameResults',
                     params: { days: parseInt(days) },
                     requestId: CLIENT_ID

@@ -1,170 +1,120 @@
 #!/bin/bash
-# Roulettist 部署腳本 - Rocky Linux 9 + LAMPP
+# Roulettist 部署腳本 - Rocky Linux 9 / LAMPP
 # 使用方式: chmod +x deploy.sh && ./deploy.sh
 
 set -e
 
-echo "=========================================="
-echo "  Roulettist 部署腳本"
-echo "  目標環境: Rocky Linux 9 + LAMPP"
-echo "=========================================="
-
-# 設定變數
-APP_NAME="roulettist"
-APP_DIR="/opt/lampp/htdocs/Roulettist"
-NODE_PORT=3000
-
-# 顏色輸出
+# 顏色定義
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
-print_status() {
-    echo -e "${GREEN}[✓]${NC} $1"
-}
+echo -e "${GREEN}========================================${NC}"
+echo -e "${GREEN}   Roulettist 輪盤遊戲 - 部署腳本${NC}"
+echo -e "${GREEN}========================================${NC}"
 
-print_warning() {
-    echo -e "${YELLOW}[!]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[✗]${NC} $1"
-}
+# 設定變數
+APP_NAME="roulettist"
+DEPLOY_DIR="/opt/lampp/htdocs/${APP_NAME}"
+SERVICE_NAME="roulettist"
 
 # 檢查是否為 root
-check_root() {
-    if [ "$EUID" -ne 0 ]; then
-        print_warning "建議使用 sudo 執行此腳本"
-    fi
-}
+if [ "$EUID" -ne 0 ]; then
+    echo -e "${RED}請使用 root 權限執行此腳本${NC}"
+    echo "使用方式: sudo ./deploy.sh"
+    exit 1
+fi
 
-# 步驟 1: 安裝 Node.js
-install_nodejs() {
-    echo ""
-    echo ">>> 步驟 1: 安裝 Node.js"
+# 1. 檢查 Node.js
+echo -e "\n${YELLOW}[1/6] 檢查 Node.js...${NC}"
+if ! command -v node &> /dev/null; then
+    echo "正在安裝 Node.js..."
+    dnf install -y nodejs npm
+fi
+echo -e "Node.js 版本: $(node -v)"
+echo -e "npm 版本: $(npm -v)"
 
-    if command -v node &> /dev/null; then
-        NODE_VERSION=$(node -v)
-        print_status "Node.js 已安裝: $NODE_VERSION"
-    else
-        print_status "正在安裝 Node.js 18..."
-        sudo dnf module enable nodejs:18 -y
-        sudo dnf install nodejs -y
-        print_status "Node.js 安裝完成: $(node -v)"
-    fi
-}
+# 2. 建立部署目錄
+echo -e "\n${YELLOW}[2/6] 建立部署目錄...${NC}"
+mkdir -p ${DEPLOY_DIR}
+mkdir -p ${DEPLOY_DIR}/reports
 
-# 步驟 2: 建立應用目錄
-setup_directory() {
-    echo ""
-    echo ">>> 步驟 2: 建立應用目錄"
+# 3. 複製檔案（如果是在當前目錄執行）
+echo -e "\n${YELLOW}[3/6] 複製應用程式檔案...${NC}"
+SCRIPT_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-    if [ ! -d "$APP_DIR" ]; then
-        sudo mkdir -p "$APP_DIR"
-        print_status "已建立目錄: $APP_DIR"
-    else
-        print_status "目錄已存在: $APP_DIR"
-    fi
+# 複製主要檔案
+cp -v ${SCRIPT_DIR}/server.js ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/database.js ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/simulate.js ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/package.json ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/members.json ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/index.html ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/admin.html ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/mobile.html ${DEPLOY_DIR}/
+cp -v ${SCRIPT_DIR}/login.html ${DEPLOY_DIR}/
 
-    # 設定權限
-    sudo chown -R $USER:$USER "$APP_DIR"
-}
+# 複製 script.js（如果存在）
+[ -f ${SCRIPT_DIR}/script.js ] && cp -v ${SCRIPT_DIR}/script.js ${DEPLOY_DIR}/
 
-# 步驟 3: 安裝依賴
-install_dependencies() {
-    echo ""
-    echo ">>> 步驟 3: 安裝 NPM 依賴"
+echo "檔案複製完成"
 
-    cd "$APP_DIR"
+# 4. 安裝依賴
+echo -e "\n${YELLOW}[4/6] 安裝 Node.js 依賴...${NC}"
+cd ${DEPLOY_DIR}
+npm install --production
 
-    if [ -f "package.json" ]; then
-        npm install
-        print_status "NPM 依賴安裝完成"
-    else
-        print_error "找不到 package.json，請先上傳專案文件"
-        exit 1
-    fi
-}
+# 5. 建立 systemd 服務
+echo -e "\n${YELLOW}[5/6] 建立系統服務...${NC}"
+cat > /etc/systemd/system/${SERVICE_NAME}.service << EOF
+[Unit]
+Description=Roulettist Roulette Game Server
+After=network.target
 
-# 步驟 4: 設定防火牆
-setup_firewall() {
-    echo ""
-    echo ">>> 步驟 4: 設定防火牆"
+[Service]
+Type=simple
+User=root
+WorkingDirectory=${DEPLOY_DIR}
+ExecStart=/usr/bin/node server.js
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=${SERVICE_NAME}
+Environment=NODE_ENV=production
 
-    if command -v firewall-cmd &> /dev/null; then
-        sudo firewall-cmd --permanent --add-port=${NODE_PORT}/tcp 2>/dev/null || true
-        sudo firewall-cmd --reload 2>/dev/null || true
-        print_status "已開放 port ${NODE_PORT}"
-    else
-        print_warning "firewall-cmd 不可用，請手動設定防火牆"
-    fi
-}
+[Install]
+WantedBy=multi-user.target
+EOF
 
-# 步驟 5: 安裝並設定 PM2
-setup_pm2() {
-    echo ""
-    echo ">>> 步驟 5: 設定 PM2 進程管理"
+# 重新載入 systemd
+systemctl daemon-reload
 
-    # 安裝 PM2
-    if ! command -v pm2 &> /dev/null; then
-        sudo npm install -g pm2
-        print_status "PM2 安裝完成"
-    else
-        print_status "PM2 已安裝"
-    fi
+# 6. 啟動服務
+echo -e "\n${YELLOW}[6/6] 啟動服務...${NC}"
+systemctl enable ${SERVICE_NAME}
+systemctl restart ${SERVICE_NAME}
 
-    cd "$APP_DIR"
-
-    # 停止舊進程（如果存在）
-    pm2 delete "$APP_NAME" 2>/dev/null || true
-
-    # 啟動應用
-    pm2 start server.js --name "$APP_NAME"
-    print_status "應用已啟動"
-
-    # 設定開機自動啟動
-    pm2 startup systemd -u $USER --hp $HOME 2>/dev/null || true
-    pm2 save
-    print_status "已設定開機自動啟動"
-}
-
-# 步驟 6: 顯示狀態
-show_status() {
-    echo ""
-    echo "=========================================="
-    echo "  部署完成!"
-    echo "=========================================="
-    echo ""
-
-    # 取得伺服器 IP
-    SERVER_IP=$(hostname -I | awk '{print $1}')
-
-    echo "應用狀態:"
-    pm2 status "$APP_NAME"
-    echo ""
-    echo "訪問地址:"
-    echo "  主頁面: http://${SERVER_IP}:${NODE_PORT}"
-    echo "  手機版: http://${SERVER_IP}:${NODE_PORT}/mobile.html"
-    echo "  管理員: http://${SERVER_IP}:${NODE_PORT}/admin.html"
-    echo ""
-    echo "常用命令:"
-    echo "  查看日誌: pm2 logs $APP_NAME"
-    echo "  重啟應用: pm2 restart $APP_NAME"
-    echo "  停止應用: pm2 stop $APP_NAME"
-    echo ""
-}
-
-# 主程式
-main() {
-    check_root
-    install_nodejs
-    setup_directory
-    install_dependencies
-    setup_firewall
-    setup_pm2
-    show_status
-}
-
-# 執行
-main
+# 檢查狀態
+sleep 2
+if systemctl is-active --quiet ${SERVICE_NAME}; then
+    echo -e "\n${GREEN}========================================${NC}"
+    echo -e "${GREEN}   部署完成！${NC}"
+    echo -e "${GREEN}========================================${NC}"
+    echo -e "\n服務狀態: ${GREEN}運行中${NC}"
+    echo -e "部署目錄: ${DEPLOY_DIR}"
+    echo -e "\n訪問網址:"
+    echo -e "  主控台: http://tw5399.com:3000"
+    echo -e "  管理員: http://tw5399.com:3000/admin.html"
+    echo -e "  手機版: http://tw5399.com:3000/mobile.html"
+    echo -e "\n管理指令:"
+    echo -e "  查看狀態: systemctl status ${SERVICE_NAME}"
+    echo -e "  查看日誌: journalctl -u ${SERVICE_NAME} -f"
+    echo -e "  重啟服務: systemctl restart ${SERVICE_NAME}"
+    echo -e "  停止服務: systemctl stop ${SERVICE_NAME}"
+else
+    echo -e "\n${RED}服務啟動失敗！${NC}"
+    echo "請檢查日誌: journalctl -u ${SERVICE_NAME} -n 50"
+    exit 1
+fi

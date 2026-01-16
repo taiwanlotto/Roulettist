@@ -204,12 +204,38 @@
         .result-number {
             font-size: 48px;
             font-weight: bold;
-            margin: 10px 0;
+            margin: 10px auto;
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
         }
 
-        .result-number.red { color: #ff6b6b; }
-        .result-number.blue { color: #4dabf7; }
-        .result-number.green { color: #90EE90; }
+        .result-number.red {
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c 50%, #a01030);
+            box-shadow: inset -3px -3px 8px rgba(0,0,0,0.4),
+                        inset 3px 3px 8px rgba(255,255,255,0.3),
+                        0 5px 15px rgba(0,0,0,0.5),
+                        0 0 20px rgba(231, 76, 60, 0.5);
+        }
+        .result-number.blue {
+            background: radial-gradient(circle at 30% 30%, #5dade2, #3498db 50%, #2a4a9e);
+            box-shadow: inset -3px -3px 8px rgba(0,0,0,0.4),
+                        inset 3px 3px 8px rgba(255,255,255,0.3),
+                        0 5px 15px rgba(0,0,0,0.5),
+                        0 0 20px rgba(52, 152, 219, 0.5);
+        }
+        .result-number.green {
+            background: radial-gradient(circle at 30% 30%, #58d68d, #2ecc71 50%, #166b16);
+            box-shadow: inset -3px -3px 8px rgba(0,0,0,0.4),
+                        inset 3px 3px 8px rgba(255,255,255,0.3),
+                        0 5px 15px rgba(0,0,0,0.5),
+                        0 0 20px rgba(46, 204, 113, 0.5);
+        }
 
         .result-profit {
             font-size: 24px;
@@ -323,6 +349,64 @@
         .odd-even-btn.big-btn.selected {
             border-color: #e03131;
             background: #fff5f5;
+        }
+
+        /* 顏色投注按鈕 */
+        .color-selector {
+            display: none;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .color-selector.show {
+            display: flex;
+        }
+
+        .color-btn {
+            flex: 1;
+            padding: 15px 10px;
+            border: 3px solid #ccc;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            background: white;
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+
+        .color-btn.red-btn {
+            color: #e74c3c;
+        }
+
+        .color-btn.blue-btn {
+            color: #3498db;
+        }
+
+        .color-btn.green-btn {
+            color: #2ecc71;
+        }
+
+        .color-btn.selected {
+            transform: scale(1.02);
+        }
+
+        .color-btn.red-btn.selected {
+            border-color: #e74c3c;
+            background: #fff5f5;
+            box-shadow: 0 0 10px rgba(231, 76, 60, 0.3);
+        }
+
+        .color-btn.blue-btn.selected {
+            border-color: #3498db;
+            background: #e7f5ff;
+            box-shadow: 0 0 10px rgba(52, 152, 219, 0.3);
+        }
+
+        .color-btn.green-btn.selected {
+            border-color: #2ecc71;
+            background: #ebfbee;
+            box-shadow: 0 0 10px rgba(46, 204, 113, 0.3);
         }
 
         .number-selector {
@@ -646,6 +730,7 @@
                 <div class="bet-type-btn active" data-type="number" onclick="switchBetType('number')">號碼</div>
                 <div class="bet-type-btn" data-type="oddeven" onclick="switchBetType('oddeven')">單雙</div>
                 <div class="bet-type-btn" data-type="bigsmall" onclick="switchBetType('bigsmall')">大小</div>
+                <div class="bet-type-btn" data-type="color" onclick="switchBetType('color')">顏色</div>
             </div>
 
             <div class="number-selector" id="numberSelector">
@@ -674,6 +759,19 @@
                 </div>
             </div>
             <div class="payout-info" id="bigSmallPayout" style="display:none;">賠率 1:1 (39莊家通殺)</div>
+
+            <div class="color-selector" id="colorSelector">
+                <div class="color-btn red-btn" data-value="red" onclick="selectColor('red')">
+                    紅<br><small>2,5,8,11...</small>
+                </div>
+                <div class="color-btn green-btn" data-value="green" onclick="selectColor('green')">
+                    綠<br><small>1,4,7,10...</small>
+                </div>
+                <div class="color-btn blue-btn" data-value="blue" onclick="selectColor('blue')">
+                    藍<br><small>3,6,9,12...</small>
+                </div>
+            </div>
+            <div class="payout-info" id="colorPayout" style="display:none;">賠率 1:1.8</div>
 
             <div>
                 <label for="amount">投注金額</label>
@@ -769,6 +867,7 @@
         let currentBetType = 'number';
         let selectedOddEven = null;
         let selectedBigSmall = null;
+        let selectedColor = null;
         let currentBets = [];
         let resultHistory = [];
         let autoBetEnabled = false;
@@ -780,6 +879,11 @@
         // MQTT 設定
         const MQTT_BROKER = 'wss://tw5399.com:9002';
         const CLIENT_ID = 'mobile_' + Math.random().toString(16).substr(2, 8);
+
+        // 頻道設定（由伺服器注入）
+        const CHANNEL_ID = window.CHANNEL_ID || 'local';
+        const CHANNEL_PREFIX = `roulette/${CHANNEL_ID}`;
+        console.log('系統頻道:', CHANNEL_ID);
 
         // 切換投注類型
         function switchBetType(type) {
@@ -794,12 +898,16 @@
             const oddEvenPayout = document.getElementById('oddEvenPayout');
             const bigSmallSelector = document.getElementById('bigSmallSelector');
             const bigSmallPayout = document.getElementById('bigSmallPayout');
+            const colorSelector = document.getElementById('colorSelector');
+            const colorPayout = document.getElementById('colorPayout');
 
             numberSelector.classList.add('hide');
             oddEvenSelector.classList.remove('show');
             oddEvenPayout.style.display = 'none';
             bigSmallSelector.classList.remove('show');
             bigSmallPayout.style.display = 'none';
+            colorSelector.classList.remove('show');
+            colorPayout.style.display = 'none';
 
             if (type === 'number') {
                 numberSelector.classList.remove('hide');
@@ -809,6 +917,9 @@
             } else if (type === 'bigsmall') {
                 bigSmallSelector.classList.add('show');
                 bigSmallPayout.style.display = 'block';
+            } else if (type === 'color') {
+                colorSelector.classList.add('show');
+                colorPayout.style.display = 'block';
             }
 
             updateAutoBetStatus();
@@ -825,6 +936,14 @@
         function selectBigSmall(value) {
             selectedBigSmall = value;
             document.querySelectorAll('.odd-even-btn.big-btn, .odd-even-btn.small-btn').forEach(btn => {
+                btn.classList.toggle('selected', btn.dataset.value === value);
+            });
+            updateAutoBetStatus();
+        }
+
+        function selectColor(value) {
+            selectedColor = value;
+            document.querySelectorAll('.color-btn').forEach(btn => {
                 btn.classList.toggle('selected', btn.dataset.value === value);
             });
             updateAutoBetStatus();
@@ -876,23 +995,23 @@
                 console.log('MQTT 連線成功');
                 showStatus('MQTT 連線成功，登入中...', 'connecting');
 
-                // 訂閱主題
+                // 訂閱主題（使用頻道前綴）
                 mqttClient.subscribe([
-                    'roulette/game/state',
-                    'roulette/game/result',
-                    'roulette/bets/update',
-                    `roulette/login/response/${CLIENT_ID}`,
-                    `roulette/bet/response/${CLIENT_ID}`,
-                    `roulette/player/result/${member.id}`,
-                    `roulette/balance/${member.id}`,
-                    `roulette/admin/query/response/${CLIENT_ID}`
+                    `${CHANNEL_PREFIX}/game/state`,
+                    `${CHANNEL_PREFIX}/game/result`,
+                    `${CHANNEL_PREFIX}/bets/update`,
+                    `${CHANNEL_PREFIX}/login/response/${CLIENT_ID}`,
+                    `${CHANNEL_PREFIX}/bet/response/${CLIENT_ID}`,
+                    `${CHANNEL_PREFIX}/player/result/${member.id}`,
+                    `${CHANNEL_PREFIX}/balance/${member.id}`,
+                    `${CHANNEL_PREFIX}/admin/query/response/${CLIENT_ID}`
                 ]);
 
                 // 通知伺服器客戶端上線
-                mqttClient.publish('roulette/client/connect', JSON.stringify({ clientId: CLIENT_ID }));
+                mqttClient.publish(`${CHANNEL_PREFIX}/client/connect`, JSON.stringify({ clientId: CLIENT_ID }));
 
                 // 發送登入請求
-                mqttClient.publish('roulette/player/login', JSON.stringify({
+                mqttClient.publish(`${CHANNEL_PREFIX}/player/login`, JSON.stringify({
                     username: member.username,
                     password: '1234',
                     clientId: CLIENT_ID
@@ -925,7 +1044,7 @@
 
         function handleMQTTMessage(topic, data) {
             // 登入回應
-            if (topic === `roulette/login/response/${CLIENT_ID}`) {
+            if (topic === `${CHANNEL_PREFIX}/login/response/${CLIENT_ID}`) {
                 if (data.success) {
                     showStatus('登入成功！', 'success');
                     member.balance = data.member.balance;
@@ -944,7 +1063,7 @@
             }
 
             // 投注回應
-            if (topic === `roulette/bet/response/${CLIENT_ID}`) {
+            if (topic === `${CHANNEL_PREFIX}/bet/response/${CLIENT_ID}`) {
                 if (data.success) {
                     showStatus(`投注成功！${data.target} + $${data.amount}`, 'success');
                     updateBalance(data.balance);
@@ -956,7 +1075,7 @@
             }
 
             // 遊戲狀態
-            if (topic === 'roulette/game/state') {
+            if (topic === `${CHANNEL_PREFIX}/game/state`) {
                 updateTimerDisplay(data.phase, data.seconds);
                 if (data.roundNumber) {
                     currentRoundNumber = data.roundNumber;
@@ -966,7 +1085,7 @@
             }
 
             // 遊戲結果
-            if (topic === 'roulette/game/result') {
+            if (topic === `${CHANNEL_PREFIX}/game/result`) {
                 if (data.type === 'spin_wheel') {
                     showStatus('輪盤轉動中...', 'connecting');
                 } else if (data.type === 'game_result') {
@@ -976,7 +1095,7 @@
             }
 
             // 個人結果
-            if (topic === `roulette/player/result/${member.id}`) {
+            if (topic === `${CHANNEL_PREFIX}/player/result/${member.id}`) {
                 showGameResult(data.winningNumber, data.profit);
                 if (data.balance !== undefined) {
                     updateBalance(data.balance);
@@ -987,14 +1106,14 @@
             }
 
             // 餘額更新
-            if (topic === `roulette/balance/${member.id}`) {
+            if (topic === `${CHANNEL_PREFIX}/balance/${member.id}`) {
                 updateBalance(data.balance);
                 showStatus('餘額已更新', 'success');
                 return;
             }
 
             // 投注更新
-            if (topic === 'roulette/bets/update') {
+            if (topic === `${CHANNEL_PREFIX}/bets/update`) {
                 if (data.type === 'new_round') {
                     hideGameResult();
                     showStatus('新一局開始，開放下注！', 'success');
@@ -1005,7 +1124,7 @@
             }
 
             // 查詢回應
-            if (topic === `roulette/admin/query/response/${CLIENT_ID}`) {
+            if (topic === `${CHANNEL_PREFIX}/admin/query/response/${CLIENT_ID}`) {
                 handleQueryResponse(data);
                 return;
             }
@@ -1073,9 +1192,15 @@
                         return;
                     }
                     target = selectedBigSmall;
+                } else if (currentBetType === 'color') {
+                    if (!selectedColor) {
+                        showStatus('請選擇顏色', 'error');
+                        return;
+                    }
+                    target = selectedColor;
                 }
 
-                mqttClient.publish('roulette/player/bet', JSON.stringify({
+                mqttClient.publish(`${CHANNEL_PREFIX}/player/bet`, JSON.stringify({
                     memberId: member.id,
                     betType: currentBetType,
                     target: target,
@@ -1106,7 +1231,7 @@
         // 發送斷線通知
         function sendDisconnect() {
             if (mqttClient && member) {
-                mqttClient.publish('roulette/client/disconnect', JSON.stringify({
+                mqttClient.publish(`${CHANNEL_PREFIX}/client/disconnect`, JSON.stringify({
                     memberId: member.id,
                     clientId: CLIENT_ID
                 }));
@@ -1161,6 +1286,10 @@
                 if (selectedBigSmall) {
                     return { type: 'bigsmall', target: selectedBigSmall };
                 }
+            } else if (currentBetType === 'color') {
+                if (selectedColor) {
+                    return { type: 'color', target: selectedColor };
+                }
             }
             return null;
         }
@@ -1194,6 +1323,9 @@
                         targetText = currentTarget.target === 'odd' ? '單' : '雙';
                     } else if (currentTarget.type === 'bigsmall') {
                         targetText = currentTarget.target === 'big' ? '大' : '小';
+                    } else if (currentTarget.type === 'color') {
+                        const colorNames = { red: '紅', green: '綠', blue: '藍' };
+                        targetText = colorNames[currentTarget.target] || currentTarget.target;
                     }
                     statusEl.textContent = `${targetText} $${currentAmount}`;
                     statusEl.className = 'auto-bet-status active';
@@ -1229,7 +1361,7 @@
 
             autoBetExecuted = true;
 
-            mqttClient.publish('roulette/player/bet', JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/player/bet`, JSON.stringify({
                 memberId: member.id,
                 betType: currentTarget.type,
                 target: currentTarget.target,
@@ -1244,6 +1376,9 @@
                 targetText = currentTarget.target === 'odd' ? '單' : '雙';
             } else if (currentTarget.type === 'bigsmall') {
                 targetText = currentTarget.target === 'big' ? '大' : '小';
+            } else if (currentTarget.type === 'color') {
+                const colorNames = { red: '紅', green: '綠', blue: '藍' };
+                targetText = colorNames[currentTarget.target] || currentTarget.target;
             }
 
             showStatus(`自動投注: ${targetText} $${currentAmount}`, 'success');
@@ -1294,10 +1429,19 @@
             const isBig = winNum >= 20 && winNum <= 38;
             const isSmall = winNum >= 1 && winNum <= 19;
 
+            // 計算開獎號碼的顏色：餘0=藍, 餘1=綠, 餘2=紅
+            const colorIndex = winNum % 3;
+            let winningColor;
+            if (colorIndex === 0) winningColor = '藍';
+            else if (colorIndex === 1) winningColor = '綠';
+            else winningColor = '紅';
+
             currentBets.forEach(bet => {
                 if (bet.target === winningNumber) {
+                    // 號碼投注中獎
                     bet.result = 'win';
                 } else if (winNum === 39 && (bet.target === '單' || bet.target === '雙' || bet.target === '大' || bet.target === '小')) {
+                    // 39 通殺單雙大小（但不通殺顏色，39是藍色）
                     bet.result = 'lose';
                 } else if (bet.target === '單' && isOdd && winNum !== 39) {
                     bet.result = 'win';
@@ -1306,6 +1450,12 @@
                 } else if (bet.target === '大' && isBig) {
                     bet.result = 'win';
                 } else if (bet.target === '小' && isSmall) {
+                    bet.result = 'win';
+                } else if (bet.target === '紅' && winningColor === '紅') {
+                    bet.result = 'win';
+                } else if (bet.target === '綠' && winningColor === '綠') {
+                    bet.result = 'win';
+                } else if (bet.target === '藍' && winningColor === '藍') {
                     bet.result = 'win';
                 } else {
                     bet.result = 'lose';
@@ -1421,7 +1571,7 @@
 
             pendingQueryCallback = 'memberBetRecords';
 
-            mqttClient.publish('roulette/admin/query', JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/admin/query`, JSON.stringify({
                 queryType: 'memberBetRecords',
                 params: { memberId: member.id, days: days },
                 requestId: CLIENT_ID
@@ -1429,7 +1579,7 @@
 
             // 同時查詢統計
             setTimeout(() => {
-                mqttClient.publish('roulette/admin/query', JSON.stringify({
+                mqttClient.publish(`${CHANNEL_PREFIX}/admin/query`, JSON.stringify({
                     queryType: 'memberStats',
                     params: { memberId: member.id, days: days },
                     requestId: CLIENT_ID
@@ -1466,6 +1616,9 @@
                     targetText = record.bet_target === 'odd' ? '單' : '雙';
                 } else if (record.bet_type === 'bigsmall') {
                     targetText = record.bet_target === 'big' ? '大' : '小';
+                } else if (record.bet_type === 'color') {
+                    const colorNames = { red: '紅', green: '綠', blue: '藍' };
+                    targetText = colorNames[record.bet_target] || record.bet_target;
                 }
 
                 let profitText = '--';

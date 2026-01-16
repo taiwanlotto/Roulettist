@@ -23,17 +23,21 @@
 
         .header {
             text-align: center;
-            padding: 20px;
-            background: rgba(0, 0, 0, 0.4);
+            padding: 20px 30px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
             border-radius: 15px;
             margin-bottom: 20px;
-            border: 2px solid #2e8b2e;
+            border: 2px solid #3a9f3a;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3),
+                        inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
         .header h1 {
             color: #90EE90;
             font-size: 32px;
-            text-shadow: 0 0 10px rgba(144, 238, 144, 0.5);
+            text-shadow: 0 0 15px rgba(144, 238, 144, 0.6),
+                         0 2px 4px rgba(0,0,0,0.5);
+            letter-spacing: 2px;
         }
 
         .main-display {
@@ -50,11 +54,13 @@
         }
 
         .wheel-section {
-            background: rgba(0, 0, 0, 0.4);
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
             border-radius: 15px;
             padding: 30px;
             text-align: center;
-            border: 2px solid #2e8b2e;
+            border: 2px solid #3a9f3a;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3),
+                        inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
         .round-info {
@@ -189,8 +195,13 @@
             color: #fff;
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.9);
             border-radius: 50%;
-            background: rgba(0, 0, 0, 0.3);
+            box-shadow: inset -2px -2px 4px rgba(0,0,0,0.4),
+                        inset 2px 2px 4px rgba(255,255,255,0.2),
+                        0 2px 4px rgba(0,0,0,0.3);
         }
+        .wheel-number.red { background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c 50%, #a01030); }
+        .wheel-number.blue { background: radial-gradient(circle at 30% 30%, #5dade2, #3498db 50%, #2a4a9e); }
+        .wheel-number.green { background: radial-gradient(circle at 30% 30%, #58d68d, #2ecc71 50%, #166b16); }
 
         .wheel-center {
             position: absolute;
@@ -200,16 +211,42 @@
             width: 100px;
             height: 100px;
             border-radius: 50%;
-            background: linear-gradient(145deg, #1a5d1a 0%, #0d3d0d 100%);
+            background: radial-gradient(circle at 30% 30%, #3a8f3a, #1a5d1a 50%, #0d3d0d);
             border: 4px solid #ffd700;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 40px;
             font-weight: bold;
-            color: #ffd700;
-            box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+            color: #fff;
+            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4),
+                        inset 5px 5px 15px rgba(255,255,255,0.15),
+                        0 0 20px rgba(0, 0, 0, 0.5),
+                        0 8px 20px rgba(0, 0, 0, 0.4);
             z-index: 10;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.7);
+        }
+
+        .wheel-center.red {
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c 50%, #a01030);
+            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4),
+                        inset 5px 5px 15px rgba(255,255,255,0.2),
+                        0 0 25px rgba(231, 76, 60, 0.5),
+                        0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+        .wheel-center.blue {
+            background: radial-gradient(circle at 30% 30%, #5dade2, #3498db 50%, #2a4a9e);
+            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4),
+                        inset 5px 5px 15px rgba(255,255,255,0.2),
+                        0 0 25px rgba(52, 152, 219, 0.5),
+                        0 8px 20px rgba(0, 0, 0, 0.4);
+        }
+        .wheel-center.green {
+            background: radial-gradient(circle at 30% 30%, #58d68d, #2ecc71 50%, #166b16);
+            box-shadow: inset -5px -5px 15px rgba(0,0,0,0.4),
+                        inset 5px 5px 15px rgba(255,255,255,0.2),
+                        0 0 25px rgba(46, 204, 113, 0.5),
+                        0 8px 20px rgba(0, 0, 0, 0.4);
         }
 
         .wheel-pointer {
@@ -251,17 +288,20 @@
         }
 
         .info-panel {
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 10px;
-            padding: 15px;
-            border: 2px solid #2e8b2e;
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
+            border-radius: 12px;
+            padding: 18px;
+            border: 2px solid #3a9f3a;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25),
+                        inset 0 1px 0 rgba(255,255,255,0.08);
         }
 
         .info-panel h3 {
             color: #90EE90;
-            margin-bottom: 10px;
-            padding-bottom: 8px;
-            border-bottom: 1px solid rgba(144, 238, 144, 0.3);
+            margin-bottom: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(144, 238, 144, 0.4);
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
 
         .stat-row {
@@ -295,10 +335,12 @@
         }
 
         .bet-panel {
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 10px;
-            padding: 15px;
-            border: 2px solid #2e8b2e;
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
+            border-radius: 12px;
+            padding: 18px;
+            border: 2px solid #3a9f3a;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25),
+                        inset 0 1px 0 rgba(255,255,255,0.08);
         }
 
         .bet-panel h3 {
@@ -306,16 +348,19 @@
             margin-bottom: 15px;
             text-align: center;
             font-size: 18px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
 
         .bet-row {
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.3);
-            border-radius: 8px;
-            margin-bottom: 8px;
+            padding: 12px 15px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.4) 0%, rgba(0,0,0,0.2) 100%);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.05),
+                        0 2px 4px rgba(0,0,0,0.2);
         }
 
         .bet-row:last-child {
@@ -324,15 +369,31 @@
 
         .bet-type {
             font-weight: bold;
-            padding: 5px 15px;
-            border-radius: 20px;
+            padding: 8px 20px;
+            border-radius: 25px;
             font-size: 16px;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+            box-shadow: inset -2px -2px 4px rgba(0,0,0,0.3),
+                        inset 2px 2px 4px rgba(255,255,255,0.1),
+                        0 2px 4px rgba(0,0,0,0.2);
         }
 
-        .bet-type.odd { background: #e67700; color: white; }
-        .bet-type.even { background: #1971c2; color: white; }
-        .bet-type.big { background: #e03131; color: white; }
-        .bet-type.small { background: #2f9e44; color: white; }
+        .bet-type.odd {
+            background: radial-gradient(circle at 30% 30%, #ff9933, #e67700 60%, #b35900);
+            color: white;
+        }
+        .bet-type.even {
+            background: radial-gradient(circle at 30% 30%, #4dabf7, #1971c2 60%, #1254a1);
+            color: white;
+        }
+        .bet-type.big {
+            background: radial-gradient(circle at 30% 30%, #ff6b6b, #e03131 60%, #a01030);
+            color: white;
+        }
+        .bet-type.small {
+            background: radial-gradient(circle at 30% 30%, #58d68d, #2f9e44 60%, #1e7032);
+            color: white;
+        }
 
         .bet-amount {
             font-size: 20px;
@@ -374,37 +435,44 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 10px 15px;
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 25px;
+            padding: 12px 18px;
+            background: linear-gradient(180deg, rgba(0,0,0,0.6) 0%, rgba(0,0,0,0.4) 100%);
+            border-radius: 30px;
             position: fixed;
             bottom: 20px;
             right: 20px;
-            border: 1px solid #2e8b2e;
+            border: 2px solid #3a9f3a;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
         }
 
         .connection-dot {
-            width: 12px;
-            height: 12px;
+            width: 14px;
+            height: 14px;
             border-radius: 50%;
-            background: #ff6b6b;
+            background: radial-gradient(circle at 30% 30%, #ff8888, #ff6b6b 50%, #cc4444);
+            box-shadow: inset -1px -1px 3px rgba(0,0,0,0.3),
+                        0 0 8px rgba(255, 107, 107, 0.5);
         }
 
         .connection-dot.connected {
-            background: #51cf66;
-            box-shadow: 0 0 10px rgba(81, 207, 102, 0.5);
+            background: radial-gradient(circle at 30% 30%, #7ddf7d, #51cf66 50%, #2e9e44);
+            box-shadow: inset -1px -1px 3px rgba(0,0,0,0.3),
+                        0 0 12px rgba(81, 207, 102, 0.6);
         }
 
         .history-panel {
-            background: rgba(0, 0, 0, 0.4);
-            border-radius: 10px;
-            padding: 15px;
-            border: 2px solid #2e8b2e;
+            background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0.3) 100%);
+            border-radius: 12px;
+            padding: 18px;
+            border: 2px solid #3a9f3a;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.25),
+                        inset 0 1px 0 rgba(255,255,255,0.08);
         }
 
         .history-panel h3 {
             color: #90EE90;
             margin-bottom: 15px;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
 
         .history-numbers {
@@ -421,21 +489,28 @@
             border-radius: 50%;
             font-weight: bold;
             font-size: 14px;
+            color: #fff;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+            box-shadow: inset -3px -3px 6px rgba(0,0,0,0.4),
+                        inset 3px 3px 6px rgba(255,255,255,0.2),
+                        0 3px 6px rgba(0,0,0,0.3);
         }
 
-        .history-num.red { background: #e74c3c; }
-        .history-num.blue { background: #3498db; }
-        .history-num.green { background: #2ecc71; }
+        .history-num.red { background: radial-gradient(circle at 30% 30%, #ff6b6b, #e74c3c 50%, #a01030); }
+        .history-num.blue { background: radial-gradient(circle at 30% 30%, #5dade2, #3498db 50%, #2a4a9e); }
+        .history-num.green { background: radial-gradient(circle at 30% 30%, #58d68d, #2ecc71 50%, #166b16); }
 
         .qrcode-panel {
             position: absolute;
             left: 20px;
             top: 20px;
-            background: rgba(0, 0, 0, 0.6);
-            border: 2px solid #2e8b2e;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.5) 100%);
+            border: 2px solid #3a9f3a;
             border-radius: 15px;
             padding: 15px;
             text-align: center;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.4),
+                        inset 0 1px 0 rgba(255,255,255,0.1);
         }
 
         .qrcode-panel .qr-title {
@@ -443,13 +518,15 @@
             font-size: 14px;
             margin-bottom: 10px;
             font-weight: bold;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.3);
         }
 
         .qrcode-panel #qrcode {
             background: white;
             padding: 10px;
-            border-radius: 8px;
+            border-radius: 10px;
             display: inline-block;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
         }
     </style>
 </head>
@@ -573,6 +650,11 @@
         const MQTT_BROKER = 'wss://tw5399.com:9002';
         const CLIENT_ID = 'display_' + Math.random().toString(16).substr(2, 8);
 
+        // 頻道設定（由伺服器注入）
+        const CHANNEL_ID = window.CHANNEL_ID || 'local';
+        const CHANNEL_PREFIX = `roulette/${CHANNEL_ID}`;
+        console.log('系統頻道:', CHANNEL_ID);
+
         // 初始化號碼網格
         function initNumberGrid() {
             const grid = document.getElementById('numberGrid');
@@ -598,7 +680,10 @@
 
             for (let i = 1; i <= 39; i++) {
                 const num = document.createElement('div');
-                num.className = 'wheel-number';
+                // 根據號碼設定顏色類別（0=藍, 1=綠, 2=紅）
+                const colorIndex = i % 3;
+                let colorClass = colorIndex === 0 ? 'blue' : (colorIndex === 1 ? 'green' : 'red');
+                num.className = 'wheel-number ' + colorClass;
                 num.textContent = i.toString().padStart(2, '0');
 
                 // 計算角度（從頂部開始，順時針排列）
@@ -653,16 +738,16 @@
                 document.getElementById('connectionDot').classList.add('connected');
                 document.getElementById('connectionText').textContent = 'MQTT 已連線';
 
-                // 訂閱主題
+                // 訂閱主題（使用頻道前綴）
                 mqttClient.subscribe([
-                    'roulette/game/state',
-                    'roulette/game/result',
-                    'roulette/bets/update',
-                    'roulette/admin/data'
+                    `${CHANNEL_PREFIX}/game/state`,
+                    `${CHANNEL_PREFIX}/game/result`,
+                    `${CHANNEL_PREFIX}/bets/update`,
+                    `${CHANNEL_PREFIX}/admin/data`
                 ]);
 
                 // 通知伺服器客戶端上線
-                mqttClient.publish('roulette/client/connect', JSON.stringify({ clientId: CLIENT_ID, type: 'display' }));
+                mqttClient.publish(`${CHANNEL_PREFIX}/client/connect`, JSON.stringify({ clientId: CLIENT_ID, type: 'display' }));
             });
 
             mqttClient.on('message', (topic, message) => {
@@ -688,13 +773,13 @@
 
         function handleMessage(topic, data) {
             // 遊戲狀態
-            if (topic === 'roulette/game/state') {
+            if (topic === `${CHANNEL_PREFIX}/game/state`) {
                 updateGameState(data);
                 return;
             }
 
             // 遊戲結果
-            if (topic === 'roulette/game/result') {
+            if (topic === `${CHANNEL_PREFIX}/game/result`) {
                 if (data.type === 'spin_wheel') {
                     // 開始旋轉動畫
                     startWheelSpin(data.winningNumber);
@@ -706,7 +791,7 @@
             }
 
             // 投注更新
-            if (topic === 'roulette/bets/update') {
+            if (topic === `${CHANNEL_PREFIX}/bets/update`) {
                 if (data.bets) bets = data.bets;
                 if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
                 if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
@@ -715,7 +800,7 @@
             }
 
             // 管理員資料
-            if (topic === 'roulette/admin/data') {
+            if (topic === `${CHANNEL_PREFIX}/admin/data`) {
                 if (data.bets) bets = data.bets;
                 if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
                 if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
@@ -825,6 +910,12 @@
                     wheel.style.transform = `rotate(${finalTargetDeg}deg)`;
                     currentRotation = finalTargetDeg;
                     center.textContent = winningNum.toString().padStart(2, '0');
+                    // 設定中心圓球底色
+                    const colorIndex = winningNum % 3;
+                    center.className = 'wheel-center';
+                    if (colorIndex === 0) center.classList.add('blue');
+                    else if (colorIndex === 1) center.classList.add('green');
+                    else center.classList.add('red');
                 }
             }
 
@@ -848,6 +939,12 @@
 
             // 顯示號碼
             center.textContent = winningNum.toString().padStart(2, '0');
+            // 設定中心圓球底色
+            const colorIndex = winningNum % 3;
+            center.className = 'wheel-center';
+            if (colorIndex === 0) center.classList.add('blue');
+            else if (colorIndex === 1) center.classList.add('green');
+            else center.classList.add('red');
         }
 
         function updateWinningNumber(number) {
