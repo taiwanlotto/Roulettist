@@ -1140,13 +1140,15 @@
                 if (data.type === 'spin_wheel') {
                     showStatus('輪盤轉動中...', 'connecting');
                 } else if (data.type === 'game_result') {
-                    // 主控端的結果
+                    // 主控端的結果 - 停止輪盤聲音
+                    stopSpinningSound();
                 }
                 return;
             }
 
             // 個人結果
             if (topic === `${CHANNEL_PREFIX}/player/result/${member.id}`) {
+                stopSpinningSound(); // 停止輪盤聲音
                 showGameResult(data.winningNumber, data.profit);
                 if (data.balance !== undefined) {
                     updateBalance(data.balance);
