@@ -3,42 +3,69 @@ const mqtt = require('mqtt');
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 const db = require('./database');
+
+// 取得本機 IP 作為頻道 ID
+function getLocalIP() {
+    const interfaces = os.networkInterfaces();
+    for (const name of Object.keys(interfaces)) {
+        for (const iface of interfaces[name]) {
+            // 跳過內部迴圈和非 IPv4
+            if (iface.family === 'IPv4' && !iface.internal) {
+                return iface.address;
+            }
+        }
+    }
+    return '127.0.0.1';
+}
+
+// 系統頻道 ID（用於區分不同的獨立系統）
+// 優先順序：命令列參數 > 環境變數 > 本機IP
+// 使用方式：node server.js --channel=192.168.1.100
+const CHANNEL_ID = process.argv.find(arg => arg.startsWith('--channel='))?.split('=')[1] ||
+    process.env.CHANNEL_ID ||
+    getLocalIP();
+
+console.log(`\n========== 系統頻道: ${CHANNEL_ID} ==========\n`);
 
 // MQTT 連線設定
 const MQTT_BROKER = 'wss://tw5399.com:9002';
 const MQTT_OPTIONS = {
     username: 'palee',
     password: '888168',
-    clientId: 'roulette_server_' + Math.random().toString(16).substr(2, 8),
+    clientId: `roulette_${CHANNEL_ID}_` + Math.random().toString(16).substr(2, 8),
     clean: true,
     reconnectPeriod: 3000,
     connectTimeout: 30000,
     rejectUnauthorized: false  // 跳過自簽名憑證驗證
 };
 
-// MQTT 主題
+// MQTT 主題（加上頻道前綴）
+const CHANNEL_PREFIX = `roulette/${CHANNEL_ID}`;
 const TOPICS = {
-    GAME_STATE: 'roulette/game/state',           // 遊戲狀態（期數、階段、秒數）
-    GAME_RESULT: 'roulette/game/result',         // 開獎結果
-    BETS_UPDATE: 'roulette/bets/update',         // 投注更新
-    PLAYER_BET: 'roulette/player/bet',           // 玩家投注（客戶端發送）
-    PLAYER_LOGIN: 'roulette/player/login',       // 玩家登入（客戶端發送）
-    PLAYER_RESULT: 'roulette/player/result/',    // 個人結果（加上memberId）
-    ADMIN_DATA: 'roulette/admin/data',           // 管理員資料
-    ADMIN_RECHARGE: 'roulette/admin/recharge',   // 管理員充值
-    ADMIN_QUERY: 'roulette/admin/query',         // 管理員查詢
-    BALANCE_UPDATE: 'roulette/balance/',         // 餘額更新（加上memberId）
+    GAME_STATE: `${CHANNEL_PREFIX}/game/state`,           // 遊戲狀態（期數、階段、秒數）
+    GAME_RESULT: `${CHANNEL_PREFIX}/game/result`,         // 開獎結果
+    BETS_UPDATE: `${CHANNEL_PREFIX}/bets/update`,         // 投注更新
+    PLAYER_BET: `${CHANNEL_PREFIX}/player/bet`,           // 玩家投注（客戶端發送）
+    PLAYER_LOGIN: `${CHANNEL_PREFIX}/player/login`,       // 玩家登入（客戶端發送）
+    PLAYER_RESULT: `${CHANNEL_PREFIX}/player/result/`,    // 個人結果（加上memberId）
+    ADMIN_DATA: `${CHANNEL_PREFIX}/admin/data`,           // 管理員資料
+    ADMIN_RECHARGE: `${CHANNEL_PREFIX}/admin/recharge`,   // 管理員充值
+    ADMIN_QUERY: `${CHANNEL_PREFIX}/admin/query`,         // 管理員查詢
+    BALANCE_UPDATE: `${CHANNEL_PREFIX}/balance/`,         // 餘額更新（加上memberId）
 };
 
 // 儲存所有投注資料
 let bets = {}; // { number: { total: 0, players: [] } }
 let oddEvenBets = { odd: { total: 0, players: [] }, even: { total: 0, players: [] } };
 let bigSmallBets = { big: { total: 0, players: [] }, small: { total: 0, players: [] } };
+let colorBets = { red: { total: 0, players: [] }, blue: { total: 0, players: [] }, green: { total: 0, players: [] } };
 let sessions = {}; // 儲存已登入的會員 session
 let currentPhase = 'stop'; // stop, betting, spinning
 let lastWinningNumber = null;
 let currentRoundNumber = null;
+let settlingRoundNumber = null; // 用於結算的期數（在進入spinning時保存）
 let gameRunning = false;
 let gameTimer = null;
 let onlineCount = 0;
@@ -54,6 +81,19 @@ function initBets() {
     }
     oddEvenBets = { odd: { total: 0, players: [] }, even: { total: 0, players: [] } };
     bigSmallBets = { big: { total: 0, players: [] }, small: { total: 0, players: [] } };
+    colorBets = { red: { total: 0, players: [] }, blue: { total: 0, players: [] }, green: { total: 0, players: [] } };
+}
+
+// 取得號碼對應的顏色（按照輪盤實際顏色）
+// 01,04,07,10,13,16,19,22,25,28,31,34,37 = 綠色（餘1）
+// 02,05,08,11,14,17,20,23,26,29,32,35,38 = 紅色（餘2）
+// 03,06,09,12,15,18,21,24,27,30,33,36,39 = 藍色（餘0）
+function getNumberColor(num) {
+    const n = parseInt(num);
+    const colorIndex = n % 3;
+    if (colorIndex === 0) return 'blue';  // 3,6,9,12,15,18...
+    if (colorIndex === 1) return 'green'; // 1,4,7,10,13,16...
+    return 'red'; // colorIndex === 2 (2,5,8,11,14,17...)
 }
 
 initBets();
@@ -67,14 +107,14 @@ function connectMQTT() {
     mqttClient.on('connect', () => {
         console.log('MQTT 連線成功');
 
-        // 訂閱需要監聽的主題
+        // 訂閱需要監聯的主題
         mqttClient.subscribe([
             TOPICS.PLAYER_BET,
             TOPICS.PLAYER_LOGIN,
             TOPICS.ADMIN_RECHARGE,
             TOPICS.ADMIN_QUERY,
-            'roulette/client/connect',
-            'roulette/client/disconnect'
+            `${CHANNEL_PREFIX}/client/connect`,
+            `${CHANNEL_PREFIX}/client/disconnect`
         ], (err) => {
             if (err) {
                 console.error('MQTT 訂閱失敗:', err);
@@ -112,7 +152,7 @@ function connectMQTT() {
 // 處理 MQTT 訊息
 async function handleMQTTMessage(topic, data) {
     // 客戶端連線
-    if (topic === 'roulette/client/connect') {
+    if (topic === `${CHANNEL_PREFIX}/client/connect`) {
         onlineCount++;
         console.log(`客戶端連線，目前在線: ${onlineCount}`);
         // 有人上線就啟動遊戲
@@ -123,7 +163,7 @@ async function handleMQTTMessage(topic, data) {
     }
 
     // 客戶端斷線
-    if (topic === 'roulette/client/disconnect') {
+    if (topic === `${CHANNEL_PREFIX}/client/disconnect`) {
         onlineCount = Math.max(0, onlineCount - 1);
         if (data.memberId && sessions[data.memberId]) {
             delete sessions[data.memberId];
@@ -169,7 +209,7 @@ async function handleLogin(data) {
 
         // 檢查是否已經有人登入此帳號
         if (sessions[memberId]) {
-            mqttClient.publish(`roulette/login/response/${clientId}`, JSON.stringify({
+            mqttClient.publish(`${CHANNEL_PREFIX}/login/response/${clientId}`, JSON.stringify({
                 success: false,
                 message: '此帳號已在其他裝置登入中'
             }));
@@ -179,7 +219,7 @@ async function handleLogin(data) {
 
         sessions[memberId] = { clientId, name: result.member.name };
 
-        mqttClient.publish(`roulette/login/response/${clientId}`, JSON.stringify({
+        mqttClient.publish(`${CHANNEL_PREFIX}/login/response/${clientId}`, JSON.stringify({
             success: true,
             member: result.member
         }));
@@ -187,7 +227,7 @@ async function handleLogin(data) {
         console.log(`會員登入: ${result.member.name} (${result.member.username})`);
         broadcastAdminUpdate();
     } else {
-        mqttClient.publish(`roulette/login/response/${data.clientId}`, JSON.stringify({
+        mqttClient.publish(`${CHANNEL_PREFIX}/login/response/${data.clientId}`, JSON.stringify({
             success: false,
             message: result.message
         }));
@@ -196,11 +236,16 @@ async function handleLogin(data) {
 
 // 處理投注
 async function handleBet(data) {
-    const { memberId, betType, target, amount, clientId } = data;
+    // 支援兩種格式：betType（正式）或 type（模擬器）
+    const { memberId, target, amount, clientId, memberName } = data;
+    const betType = data.betType || data.type;
 
-    // 檢查是否已登入
-    if (!sessions[memberId]) {
-        mqttClient.publish(`roulette/bet/response/${clientId}`, JSON.stringify({
+    // 模擬器模式：有 memberName 但沒有 clientId
+    const isSimulator = memberName && !clientId;
+
+    // 正式玩家需要檢查是否已登入
+    if (!isSimulator && !sessions[memberId]) {
+        mqttClient.publish(`${CHANNEL_PREFIX}/bet/response/${clientId}`, JSON.stringify({
             success: false,
             message: '請先登入'
         }));
@@ -209,25 +254,37 @@ async function handleBet(data) {
 
     // 檢查是否在投注期
     if (currentPhase !== 'betting') {
-        mqttClient.publish(`roulette/bet/response/${clientId}`, JSON.stringify({
-            success: false,
-            message: currentPhase === 'stop' ? '停止期，正在結算中' : '已停止下注，請等待開獎'
-        }));
+        if (clientId) {
+            mqttClient.publish(`${CHANNEL_PREFIX}/bet/response/${clientId}`, JSON.stringify({
+                success: false,
+                message: currentPhase === 'stop' ? '停止期，正在結算中' : '已停止下注，請等待開獎'
+            }));
+        }
         return;
     }
 
-    // 檢查餘額
-    const hasBalance = await db.checkBalance(memberId, amount);
-    if (!hasBalance) {
-        mqttClient.publish(`roulette/bet/response/${clientId}`, JSON.stringify({
-            success: false,
-            message: '餘額不足'
-        }));
-        return;
+    // 取得會員資料或使用模擬器資料
+    let member;
+    if (isSimulator) {
+        // 模擬器：直接使用傳入的資料，不檢查資料庫
+        member = { id: memberId, name: memberName };
+        // 將模擬玩家加入 sessions（標記為在線）
+        if (!sessions[memberId]) {
+            sessions[memberId] = { clientId: `sim_${memberId}`, name: memberName, isSimulator: true };
+        }
+    } else {
+        // 正式玩家：檢查餘額
+        const hasBalance = await db.checkBalance(memberId, amount);
+        if (!hasBalance) {
+            mqttClient.publish(`${CHANNEL_PREFIX}/bet/response/${clientId}`, JSON.stringify({
+                success: false,
+                message: '餘額不足'
+            }));
+            return;
+        }
+        member = await db.getMember(memberId);
     }
 
-    const member = await db.getMember(memberId);
-    let betTarget = target;
     let displayTarget = target;
 
     if (betType === 'number') {
@@ -272,25 +329,45 @@ async function handleBet(data) {
             bigSmallBets[target].players.push({ id: memberId, name: member.name, amount });
             bigSmallBets[target].total += amount;
         }
+    } else if (betType === 'color') {
+        // 顏色投注（紅藍綠）
+        const colorNames = { red: '紅', blue: '藍', green: '綠' };
+        displayTarget = colorNames[target] || target;
+        const existingBet = colorBets[target].players.find(p => p.id === memberId);
+        if (existingBet) {
+            await db.updateBalance(memberId, existingBet.amount);
+            colorBets[target].total -= existingBet.amount;
+            existingBet.amount = amount;
+            colorBets[target].total += amount;
+        } else {
+            colorBets[target].players.push({ id: memberId, name: member.name, amount });
+            colorBets[target].total += amount;
+        }
     }
 
-    // 扣除餘額
-    const balanceResult = await db.updateBalance(memberId, -amount);
+    // 正式玩家：扣除餘額並儲存記錄
+    if (!isSimulator) {
+        const balanceResult = await db.updateBalance(memberId, -amount);
+        await db.addBetRecord(memberId, currentRoundNumber, betType, target, amount);
 
-    // 儲存押注記錄
-    await db.addBetRecord(memberId, currentRoundNumber, betType, target, amount);
+        // 發送投注成功訊息
+        mqttClient.publish(`${CHANNEL_PREFIX}/bet/response/${clientId}`, JSON.stringify({
+            success: true,
+            target: displayTarget,
+            amount,
+            balance: balanceResult.balance
+        }));
+    } else {
+        // 模擬玩家也記錄到資料庫（用於測試結算功能）
+        // memberId 1-30 對應資料庫中的會員 ID 1-30
+        if (memberId >= 1 && memberId <= 100) {
+            await db.addBetRecord(memberId, currentRoundNumber, betType, target, amount);
+        }
+    }
 
-    // 發送投注成功訊息
-    mqttClient.publish(`roulette/bet/response/${clientId}`, JSON.stringify({
-        success: true,
-        target: displayTarget,
-        amount,
-        balance: balanceResult.balance
-    }));
+    console.log(`投注: ${displayTarget} $${amount} (${isSimulator ? '模擬' : '會員'}: ${member.name})`);
 
-    console.log(`投注: ${displayTarget} + ${amount} (會員: ${member.name})`);
-
-    // 廣播投注更新
+    // 廣播投注更新（只發送投注資料，不重新查詢資料庫）
     broadcastBetsUpdate();
 }
 
@@ -300,7 +377,7 @@ async function handleRecharge(data) {
 
     const result = await db.rechargeMember(memberId, amount, operator, remark);
 
-    mqttClient.publish(`roulette/admin/recharge/response/${requestId}`, JSON.stringify(result));
+    mqttClient.publish(`${CHANNEL_PREFIX}/admin/recharge/response/${requestId}`, JSON.stringify(result));
 
     if (result.success) {
         console.log(`充值成功: 會員ID ${memberId}, 金額 ${amount}`);
@@ -342,7 +419,7 @@ async function handleAdminQuery(data) {
             break;
     }
 
-    mqttClient.publish(`roulette/admin/query/response/${requestId}`, JSON.stringify(result));
+    mqttClient.publish(`${CHANNEL_PREFIX}/admin/query/response/${requestId}`, JSON.stringify(result));
 }
 
 // 發布遊戲狀態
@@ -363,10 +440,13 @@ function publishGameState() {
 function broadcastBetsUpdate() {
     if (!mqttClient || !mqttClient.connected) return;
 
+    const onlinePlayers = Object.keys(sessions).map(id => parseInt(id));
     mqttClient.publish(TOPICS.BETS_UPDATE, JSON.stringify({
         bets,
         oddEvenBets,
-        bigSmallBets
+        bigSmallBets,
+        colorBets,
+        onlinePlayers
     }));
 }
 
@@ -384,6 +464,7 @@ async function broadcastAdminUpdate() {
         bets,
         oddEvenBets,
         bigSmallBets,
+        colorBets,
         systemStats,
         currentRoundNumber
     }));
@@ -427,22 +508,25 @@ function startGame() {
 
             // 進入旋轉期時產生開獎號碼
             if (oldPhase === 'betting' && currentPhase === 'spinning') {
+                // 保存當前期數用於結算（因為結算時分鐘可能已經改變）
+                settlingRoundNumber = currentRoundNumber;
+
                 const randomNum = Math.floor(Math.random() * 39) + 1;
                 const winningNumber = randomNum.toString().padStart(2, '0');
                 lastWinningNumber = winningNumber;
 
-                console.log(`\n=== 輪盤開始轉動，目標號碼: ${winningNumber} ===`);
+                console.log(`\n=== 輪盤開始轉動，目標號碼: ${winningNumber}，結算期數: ${settlingRoundNumber} ===`);
 
                 mqttClient.publish(TOPICS.GAME_RESULT, JSON.stringify({
                     type: 'spin_wheel',
                     winningNumber,
-                    roundNumber: currentRoundNumber
+                    roundNumber: settlingRoundNumber
                 }));
             }
 
-            // 進入停止期時自動開獎結算
+            // 進入停止期時自動開獎結算（使用保存的期數）
             if (oldPhase === 'spinning' && currentPhase === 'stop') {
-                await handleGameResult(lastWinningNumber);
+                await handleGameResult(lastWinningNumber, settlingRoundNumber);
             }
 
             // 進入投注期時重置所有投注
@@ -455,6 +539,7 @@ function startGame() {
                     bets,
                     oddEvenBets,
                     bigSmallBets,
+                    colorBets,
                     roundNumber: currentRoundNumber
                 }));
 
@@ -467,18 +552,18 @@ function startGame() {
 }
 
 // 處理開獎結算
-async function handleGameResult(winningNumber) {
-    console.log(`\n=== 開獎結算: ${winningNumber} 期數: ${currentRoundNumber} ===`);
+async function handleGameResult(winningNumber, roundNumber) {
+    console.log(`\n=== 開獎結算: ${winningNumber} 期數: ${roundNumber} ===`);
 
     const result = calculateGameResult(winningNumber);
     const playerProfits = calculatePlayerProfits(winningNumber);
 
-    // 更新資料庫押注結果
-    await db.updateBetRecordResult(currentRoundNumber, winningNumber);
+    // 更新資料庫押注結果（使用傳入的期數，而非currentRoundNumber）
+    await db.updateBetRecordResult(roundNumber, winningNumber);
 
     // 儲存開獎結果
     await db.saveGameResult(
-        currentRoundNumber,
+        roundNumber,
         winningNumber,
         result.totalBets,
         result.totalPayout,
@@ -498,7 +583,7 @@ async function handleGameResult(winningNumber) {
             winningNumber,
             profit,
             balance: member ? member.balance : 0,
-            roundNumber: currentRoundNumber
+            roundNumber: roundNumber
         }));
     }
 
@@ -506,7 +591,8 @@ async function handleGameResult(winningNumber) {
     mqttClient.publish(TOPICS.GAME_RESULT, JSON.stringify({
         type: 'game_result',
         result,
-        roundNumber: currentRoundNumber
+        winningNumber,
+        roundNumber: roundNumber
     }));
 
     // 更新所有已登入玩家的餘額
@@ -521,11 +607,13 @@ function calculateGameResult(winningNumber) {
     }
     totalBets += oddEvenBets.odd.total + oddEvenBets.even.total;
     totalBets += bigSmallBets.big.total + bigSmallBets.small.total;
+    totalBets += colorBets.red.total + colorBets.blue.total + colorBets.green.total;
 
     const winNum = parseInt(winningNumber);
     const isOdd = winNum % 2 === 1;
     const isBig = winNum >= 20 && winNum <= 39;
     const isSmall = winNum >= 1 && winNum <= 19;
+    const winningColor = getNumberColor(winNum);
 
     // 計算號碼投注派彩 (賠率 35:1，返還本金所以 x36)
     const winningBets = bets[winningNumber] || { total: 0, players: [] };
@@ -544,6 +632,9 @@ function calculateGameResult(winningNumber) {
     } else if (isSmall) {
         totalPayout += bigSmallBets.small.total * 2;
     }
+
+    // 計算顏色投注派彩 (賠率 1:1.8，返還本金所以 x2.8)
+    totalPayout += colorBets[winningColor].total * 2.8;
 
     const winnersCount = winningBets.players.length;
 
@@ -573,6 +664,7 @@ function calculatePlayerProfits(winningNumber) {
     const isOdd = winNum % 2 === 1;
     const isBig = winNum >= 20 && winNum <= 38;
     const isSmall = winNum >= 1 && winNum <= 19;
+    const winningColor = getNumberColor(winNum);
 
     // 號碼投注
     for (let num in bets) {
@@ -612,6 +704,18 @@ function calculatePlayerProfits(winningNumber) {
         });
     });
 
+    // 顏色投注（紅藍綠）1賠1.8
+    ['red', 'blue', 'green'].forEach(color => {
+        colorBets[color].players.forEach(player => {
+            if (!playerProfits[player.id]) playerProfits[player.id] = 0;
+            if (color === winningColor) {
+                playerProfits[player.id] += player.amount * 1.8; // 1賠1.8
+            } else {
+                playerProfits[player.id] -= player.amount;
+            }
+        });
+    });
+
     return playerProfits;
 }
 
@@ -621,6 +725,8 @@ async function payoutWinners(winningNumber) {
     const isOdd = winNum % 2 === 1;
     const isBig = winNum >= 20 && winNum <= 38;
     const isSmall = winNum >= 1 && winNum <= 19;
+    const winningColor = getNumberColor(winNum);
+    const colorNames = { red: '紅', blue: '藍', green: '綠' };
 
     // 號碼投注派彩
     const winningBets = bets[winningNumber];
@@ -629,6 +735,16 @@ async function payoutWinners(winningNumber) {
             const payout = player.amount * 36;
             await db.updateBalance(player.id, payout);
             console.log(`號碼派彩: ${player.name} 投注 $${player.amount}, 獲得 $${payout}`);
+        }
+    }
+
+    // 顏色投注派彩（1賠1.8含本金，即 x2.8）
+    const winningColorBets = colorBets[winningColor];
+    if (winningColorBets && winningColorBets.players.length > 0) {
+        for (const player of winningColorBets.players) {
+            const payout = player.amount * 2.8;
+            await db.updateBalance(player.id, payout);
+            console.log(`顏色派彩: ${player.name} 投注${colorNames[winningColor]} $${player.amount}, 獲得 $${payout}`);
         }
     }
 
@@ -757,8 +873,17 @@ const server = http.createServer(async (req, res) => {
                 res.end('Server error');
             }
         } else {
-            res.writeHead(200, { 'Content-Type': contentType });
-            res.end(data);
+            // 對 HTML 檔案注入 CHANNEL_ID
+            if (extname === '.html') {
+                let html = data.toString();
+                // 在 <head> 後注入 CHANNEL_ID 設定
+                html = html.replace('<head>', `<head>\n    <script>window.CHANNEL_ID = "${CHANNEL_ID}";</script>`);
+                res.writeHead(200, { 'Content-Type': contentType });
+                res.end(html);
+            } else {
+                res.writeHead(200, { 'Content-Type': contentType });
+                res.end(data);
+            }
         }
     });
 });
@@ -773,13 +898,19 @@ async function startServer() {
         connectMQTT();
 
         // 啟動 HTTP 伺服器
-        const PORT = 3000;
+        // Port 可透過環境變數或命令列參數設定
+        const PORT = process.env.PORT ||
+            process.argv.find(arg => arg.startsWith('--port='))?.split('=')[1] ||
+            3000;
+
         server.listen(PORT, () => {
-            console.log(`HTTP 伺服器運行於 http://localhost:${PORT}`);
-            console.log(`手機登入頁面: http://localhost:${PORT}/login.html`);
-            console.log(`管理員頁面: http://localhost:${PORT}/admin.html`);
+            console.log(`\n========== ${CHANNEL_ID.toUpperCase()} 系統啟動 ==========`);
+            console.log(`HTTP 伺服器: http://localhost:${PORT}`);
+            console.log(`手機登入: http://localhost:${PORT}/login.html`);
+            console.log(`管理後台: http://localhost:${PORT}/admin.html`);
+            console.log(`MQTT 頻道: ${CHANNEL_PREFIX}`);
             console.log('\n=== 測試帳號 ===');
-            console.log('帳號: player01 ~ player10');
+            console.log('帳號: player001 ~ player100');
             console.log('密碼: 1234');
             console.log('================\n');
             console.log('MQTT 伺服器:', MQTT_BROKER);

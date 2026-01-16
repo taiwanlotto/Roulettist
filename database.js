@@ -68,7 +68,7 @@ async function initDatabase() {
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 member_id INT NOT NULL,
                 round_number VARCHAR(20) NOT NULL,
-                bet_type ENUM('number', 'oddeven', 'bigsmall') NOT NULL,
+                bet_type ENUM('number', 'oddeven', 'bigsmall', 'color') NOT NULL,
                 bet_target VARCHAR(10) NOT NULL,
                 amount DECIMAL(15, 2) NOT NULL,
                 winning_number VARCHAR(5) DEFAULT NULL,
@@ -80,6 +80,15 @@ async function initDatabase() {
                 FOREIGN KEY (member_id) REFERENCES members(id)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
+
+        // 如果資料表已存在，嘗試修改 bet_type 欄位以支援 color
+        try {
+            await pool.execute(`
+                ALTER TABLE bet_records MODIFY COLUMN bet_type ENUM('number', 'oddeven', 'bigsmall', 'color') NOT NULL
+            `);
+        } catch (alterError) {
+            // 如果已經是正確的類型，忽略錯誤
+        }
 
         // 建立開獎記錄表
         await pool.execute(`
@@ -116,19 +125,13 @@ async function initDatabase() {
         // 檢查是否有會員資料，沒有則初始化
         const [rows] = await pool.execute('SELECT COUNT(*) as count FROM members');
         if (rows[0].count === 0) {
-            // 初始化 10 個測試會員
-            const initialMembers = [
-                ['player01', '1234', '王小明', 10000],
-                ['player02', '1234', '李美玲', 15000],
-                ['player03', '1234', '張大華', 20000],
-                ['player04', '1234', '陳志明', 12000],
-                ['player05', '1234', '林淑芬', 18000],
-                ['player06', '1234', '黃建國', 25000],
-                ['player07', '1234', '吳雅婷', 16000],
-                ['player08', '1234', '蔡宗翰', 22000],
-                ['player09', '1234', '鄭佳玲', 13000],
-                ['player10', '1234', '劉俊傑', 19000]
-            ];
+            // 初始化 100 個測試會員
+            const initialMembers = [];
+            for (let i = 1; i <= 100; i++) {
+                const num = i.toString().padStart(3, '0');
+                const balance = 10000 + Math.floor(Math.random() * 20000); // 10000-30000 隨機餘額
+                initialMembers.push([`player${num}`, '1234', `玩家${num}`, balance]);
+            }
 
             for (const member of initialMembers) {
                 await pool.execute(
@@ -136,7 +139,7 @@ async function initDatabase() {
                     member
                 );
             }
-            console.log('資料庫初始化完成，已建立 10 個會員帳號');
+            console.log('資料庫初始化完成，已建立 100 個會員帳號');
         }
 
         // 清除超過2週的押注記錄
@@ -311,19 +314,33 @@ async function addBetRecord(memberId, roundNumber, betType, betTarget, amount) {
     }
 }
 
+// 取得號碼對應的顏色
+function getNumberColor(num) {
+    const n = parseInt(num);
+    const colorIndex = n % 3;
+    if (colorIndex === 0) return 'blue';  // 3,6,9,12,15,18...
+    if (colorIndex === 1) return 'green'; // 1,4,7,10,13,16...
+    return 'red'; // colorIndex === 2 (2,5,8,11,14,17...)
+}
+
 // 更新押注記錄的開獎結果
 async function updateBetRecordResult(roundNumber, winningNumber) {
     try {
+        console.log(`[DB] 更新押注結果 - 期數: ${roundNumber}, 開獎號碼: ${winningNumber}`);
+
         // 取得該期所有押注
         const [bets] = await pool.execute(
             'SELECT id, bet_type, bet_target, amount FROM bet_records WHERE round_number = ?',
             [roundNumber]
         );
 
+        console.log(`[DB] 找到 ${bets.length} 筆該期押注記錄`);
+
         const winNum = parseInt(winningNumber);
         const isOdd = winNum % 2 === 1;
         const isBig = winNum >= 20 && winNum <= 38;
         const isSmall = winNum >= 1 && winNum <= 19;
+        const winningColor = getNumberColor(winNum);
 
         for (const bet of bets) {
             let profit = 0;
@@ -353,6 +370,13 @@ async function updateBetRecordResult(roundNumber, winningNumber) {
                 } else {
                     profit = -bet.amount; // 輸掉本金
                 }
+            } else if (bet.bet_type === 'color') {
+                // 顏色投注（1賠1.8）
+                if (bet.bet_target === winningColor) {
+                    profit = bet.amount * 1.8; // 贏得1.8倍
+                } else {
+                    profit = -bet.amount; // 輸掉本金
+                }
             }
 
             // 更新押注記錄
@@ -360,8 +384,10 @@ async function updateBetRecordResult(roundNumber, winningNumber) {
                 'UPDATE bet_records SET winning_number = ?, profit = ? WHERE id = ?',
                 [winningNumber, profit, bet.id]
             );
+            console.log(`[DB] 更新押注 ID ${bet.id}: 類型=${bet.bet_type}, 目標=${bet.bet_target}, 損益=${profit}`);
         }
 
+        console.log(`[DB] 押注結果更新完成，共 ${bets.length} 筆`);
         return { success: true };
     } catch (error) {
         console.error('更新押注結果錯誤:', error);
