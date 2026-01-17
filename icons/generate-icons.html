@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <title>PWA 圖示生成器</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        .icon-preview {
+            display: inline-block;
+            margin: 10px;
+            text-align: center;
+        }
+        canvas {
+            border: 1px solid #333;
+            background: #fff;
+        }
+        button {
+            display: block;
+            margin: 5px auto;
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        h1 { color: #90EE90; }
+        p { color: #adb5bd; }
+    </style>
+</head>
+<body>
+    <h1>PWA 圖示生成器</h1>
+    <p>點擊每個圖示下方的按鈕下載 PNG 檔案，然後將檔案放入 icons 資料夾。</p>
+
+    <div id="icons"></div>
+
+    <script>
+        const sizes = [72, 96, 128, 144, 152, 192, 384, 512];
+
+        function drawIcon(canvas, size) {
+            const ctx = canvas.getContext('2d');
+            const scale = size / 512;
+
+            // 背景
+            ctx.fillStyle = '#0d3d0d';
+            roundRect(ctx, 0, 0, size, size, 64 * scale);
+            ctx.fill();
+
+            // 輪盤外圈
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 12 * scale;
+            ctx.beginPath();
+            ctx.arc(size/2, size/2, 200 * scale, 0, Math.PI * 2);
+            ctx.stroke();
+
+            // 簡化的輪盤扇區
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const radius = 180 * scale;
+            const colors = ['#e74c3c', '#3498db', '#2ecc71'];
+
+            for (let i = 0; i < 6; i++) {
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                const startAngle = (i * 60 - 90) * Math.PI / 180;
+                const endAngle = ((i + 1) * 60 - 90) * Math.PI / 180;
+                ctx.arc(centerX, centerY, radius, startAngle, endAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors[i % 3];
+                ctx.fill();
+            }
+
+            // 中心圓
+            ctx.fillStyle = '#1a5d1a';
+            ctx.beginPath();
+            ctx.arc(centerX, centerY, 60 * scale, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#ffd700';
+            ctx.lineWidth = 6 * scale;
+            ctx.stroke();
+
+            // 中心文字
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${48 * scale}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('R', centerX, centerY + 5 * scale);
+
+            // 指針
+            ctx.fillStyle = '#ffd700';
+            ctx.beginPath();
+            ctx.moveTo(centerX, 40 * scale);
+            ctx.lineTo(centerX - 16 * scale, 80 * scale);
+            ctx.lineTo(centerX + 16 * scale, 80 * scale);
+            ctx.closePath();
+            ctx.fill();
+        }
+
+        function roundRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.lineTo(x + width - radius, y);
+            ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+            ctx.lineTo(x + width, y + height - radius);
+            ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+            ctx.lineTo(x + radius, y + height);
+            ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+            ctx.lineTo(x, y + radius);
+            ctx.quadraticCurveTo(x, y, x + radius, y);
+            ctx.closePath();
+        }
+
+        function downloadCanvas(canvas, filename) {
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = canvas.toDataURL('image/png');
+            link.click();
+        }
+
+        const container = document.getElementById('icons');
+
+        sizes.forEach(size => {
+            const div = document.createElement('div');
+            div.className = 'icon-preview';
+
+            const canvas = document.createElement('canvas');
+            canvas.width = size;
+            canvas.height = size;
+            canvas.style.width = Math.min(size, 150) + 'px';
+            canvas.style.height = Math.min(size, 150) + 'px';
+
+            drawIcon(canvas, size);
+
+            const label = document.createElement('div');
+            label.textContent = `${size}x${size}`;
+
+            const btn = document.createElement('button');
+            btn.textContent = `下載 icon-${size}.png`;
+            btn.onclick = () => downloadCanvas(canvas, `icon-${size}.png`);
+
+            div.appendChild(canvas);
+            div.appendChild(label);
+            div.appendChild(btn);
+            container.appendChild(div);
+        });
+    </script>
+</body>
+</html>

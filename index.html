@@ -4,6 +4,14 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>輪盤遊戲主控台</title>
+
+    <!-- PWA 設定 -->
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d3d0d">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="輪盤遊戲">
+    <link rel="apple-touch-icon" href="/icons/icon-192.png">
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
@@ -645,6 +653,7 @@
         let bets = {};
         let oddEvenBets = { odd: { total: 0, players: [] }, even: { total: 0, players: [] } };
         let bigSmallBets = { big: { total: 0, players: [] }, small: { total: 0, players: [] } };
+        let colorBets = { red: { total: 0, players: [] }, blue: { total: 0, players: [] }, green: { total: 0, players: [] } };
         let historyNumbers = [];
 
         const MQTT_BROKER = 'wss://tw5399.com:9002';
@@ -739,12 +748,20 @@
                 document.getElementById('connectionText').textContent = 'MQTT 已連線';
 
                 // 訂閱主題（使用頻道前綴）
-                mqttClient.subscribe([
+                const topics = [
                     `${CHANNEL_PREFIX}/game/state`,
                     `${CHANNEL_PREFIX}/game/result`,
                     `${CHANNEL_PREFIX}/bets/update`,
                     `${CHANNEL_PREFIX}/admin/data`
-                ]);
+                ];
+                console.log('訂閱主題:', topics);
+                mqttClient.subscribe(topics, (err) => {
+                    if (err) {
+                        console.error('訂閱失敗:', err);
+                    } else {
+                        console.log('訂閱成功');
+                    }
+                });
 
                 // 通知伺服器客戶端上線
                 mqttClient.publish(`${CHANNEL_PREFIX}/client/connect`, JSON.stringify({ clientId: CLIENT_ID, type: 'display' }));
@@ -772,6 +789,11 @@
         }
 
         function handleMessage(topic, data) {
+            // 顯示所有收到的訊息（除了 game/state）
+            if (!topic.includes('game/state')) {
+                console.log('收到MQTT訊息:', topic, data);
+            }
+
             // 遊戲狀態
             if (topic === `${CHANNEL_PREFIX}/game/state`) {
                 updateGameState(data);
@@ -792,9 +814,13 @@
 
             // 投注更新
             if (topic === `${CHANNEL_PREFIX}/bets/update`) {
+                console.log('收到投注更新:', data);
+                console.log('colorBets 資料:', data.colorBets);
                 if (data.bets) bets = data.bets;
                 if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
                 if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
+                if (data.colorBets) colorBets = data.colorBets;
+                console.log('更新後 colorBets:', colorBets);
                 updateBetsDisplay();
                 return;
             }
@@ -804,6 +830,7 @@
                 if (data.bets) bets = data.bets;
                 if (data.oddEvenBets) oddEvenBets = data.oddEvenBets;
                 if (data.bigSmallBets) bigSmallBets = data.bigSmallBets;
+                if (data.colorBets) colorBets = data.colorBets;
                 if (data.onlinePlayers) {
                     document.getElementById('onlineCount').textContent = data.onlinePlayers.length;
                 }
@@ -999,11 +1026,21 @@
 
             totalBets += oddEvenBets.odd.total + oddEvenBets.even.total;
             totalBets += bigSmallBets.big.total + bigSmallBets.small.total;
+            // 顏色投注
+            if (colorBets && colorBets.red && colorBets.blue && colorBets.green) {
+                totalBets += colorBets.red.total + colorBets.blue.total + colorBets.green.total;
+            }
 
             oddEvenBets.odd.players.forEach(p => playerSet.add(p.id));
             oddEvenBets.even.players.forEach(p => playerSet.add(p.id));
             bigSmallBets.big.players.forEach(p => playerSet.add(p.id));
             bigSmallBets.small.players.forEach(p => playerSet.add(p.id));
+            // 顏色投注玩家（檢查是否存在）
+            if (colorBets && colorBets.red && colorBets.blue && colorBets.green) {
+                colorBets.red.players.forEach(p => playerSet.add(p.id));
+                colorBets.blue.players.forEach(p => playerSet.add(p.id));
+                colorBets.green.players.forEach(p => playerSet.add(p.id));
+            }
 
             document.getElementById('totalBets').textContent = '$' + totalBets.toLocaleString();
             document.getElementById('playerCount').textContent = playerSet.size;
@@ -1011,6 +1048,19 @@
 
         // 啟動連線
         connectMQTT();
+
+        // 註冊 Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(registration => {
+                        console.log('Service Worker 註冊成功:', registration.scope);
+                    })
+                    .catch(error => {
+                        console.log('Service Worker 註冊失敗:', error);
+                    });
+            });
+        }
     </script>
 </body>
 </html>

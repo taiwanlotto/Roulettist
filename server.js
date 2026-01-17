@@ -455,6 +455,7 @@ async function broadcastAdminUpdate() {
     if (!mqttClient || !mqttClient.connected) return;
 
     const members = await db.getAllMembers();
+    // 計算所有在線玩家（包含模擬器玩家）
     const onlinePlayers = Object.keys(sessions).map(id => parseInt(id));
     const systemStats = await db.getSystemProfitStats(1); // 當天統計
 
@@ -533,6 +534,13 @@ function startGame() {
             if (oldPhase !== 'betting' && currentPhase === 'betting') {
                 console.log('\n=== 新一局開始（自動重置）===');
                 initBets();
+
+                // 清除模擬器玩家的 session
+                for (let id in sessions) {
+                    if (sessions[id].isSimulator) {
+                        delete sessions[id];
+                    }
+                }
 
                 mqttClient.publish(TOPICS.BETS_UPDATE, JSON.stringify({
                     type: 'new_round',

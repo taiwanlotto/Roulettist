@@ -1,0 +1,34 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 背景 -->
+  <rect width="512" height="512" fill="#0d3d0d" rx="64"/>
+
+  <!-- 輪盤外圈 -->
+  <circle cx="256" cy="256" r="200" fill="none" stroke="#ffd700" stroke-width="12"/>
+
+  <!-- 輪盤扇區 (簡化版) -->
+  <g transform="translate(256,256)">
+    <!-- 紅色扇區 -->
+    <path d="M0,-180 A180,180 0 0,1 155.88,-90 L0,0 Z" fill="#e74c3c"/>
+    <path d="M155.88,90 A180,180 0 0,1 0,180 L0,0 Z" fill="#e74c3c"/>
+    <path d="M-155.88,-90 A180,180 0 0,1 -155.88,90 L0,0 Z" fill="#e74c3c"/>
+
+    <!-- 藍色扇區 -->
+    <path d="M155.88,-90 A180,180 0 0,1 155.88,90 L0,0 Z" fill="#3498db"/>
+    <path d="M0,180 A180,180 0 0,1 -155.88,90 L0,0 Z" fill="#3498db"/>
+    <path d="M-155.88,90 A180,180 0 0,1 -155.88,-90 L0,0 Z" fill="#3498db"/>
+
+    <!-- 綠色扇區 -->
+    <path d="M-155.88,-90 A180,180 0 0,1 0,-180 L0,0 Z" fill="#2ecc71"/>
+    <path d="M0,-180 A180,180 0 0,1 155.88,-90 L0,0 Z" fill="#2ecc71" transform="rotate(120)"/>
+    <path d="M0,-180 A180,180 0 0,1 155.88,-90 L0,0 Z" fill="#2ecc71" transform="rotate(240)"/>
+  </g>
+
+  <!-- 中心圓 -->
+  <circle cx="256" cy="256" r="60" fill="#1a5d1a" stroke="#ffd700" stroke-width="6"/>
+
+  <!-- 中心文字 -->
+  <text x="256" y="270" text-anchor="middle" fill="#fff" font-size="48" font-weight="bold" font-family="Arial">R</text>
+
+  <!-- 指針 -->
+  <polygon points="256,40 240,80 272,80" fill="#ffd700"/>
+</svg>
