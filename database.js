@@ -515,11 +515,22 @@ async function getMemberProfitStats(memberId, days = 14) {
 }
 
 // 取得系統損益統計（管理員用）
+// days = 0 表示只取當天
 async function getSystemProfitStats(days = 14) {
     try {
-        const dateLimit = new Date();
-        dateLimit.setDate(dateLimit.getDate() - days);
-        const dateLimitStr = dateLimit.toISOString().split('T')[0];
+        // 計算日期範圍
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
+
+        let dateLimitStr;
+        if (days === 0) {
+            // 只取當天
+            dateLimitStr = todayStr;
+        } else {
+            const dateLimit = new Date();
+            dateLimit.setDate(dateLimit.getDate() - days);
+            dateLimitStr = dateLimit.toISOString().split('T')[0];
+        }
 
         const [rows] = await pool.execute(`
             SELECT

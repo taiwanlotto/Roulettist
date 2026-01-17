@@ -457,7 +457,7 @@ async function broadcastAdminUpdate() {
     const members = await db.getAllMembers();
     // 計算所有在線玩家（包含模擬器玩家）
     const onlinePlayers = Object.keys(sessions).map(id => parseInt(id));
-    const systemStats = await db.getSystemProfitStats(1); // 當天統計
+    const systemStats = await db.getSystemProfitStats(0); // 當天統計
 
     mqttClient.publish(TOPICS.ADMIN_DATA, JSON.stringify({
         members,

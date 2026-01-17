@@ -1,4 +1,4 @@
-const CACHE_NAME = 'roulette-v1';
+const CACHE_NAME = 'roulette-v2';
 const urlsToCache = [
   '/',
   '/index.html',
