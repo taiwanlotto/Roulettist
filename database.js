@@ -56,11 +56,25 @@ async function initDatabase() {
                 password VARCHAR(255) NOT NULL,
                 name VARCHAR(100) NOT NULL,
                 balance DECIMAL(15, 2) DEFAULT 10000,
+                level INT DEFAULT 1 COMMENT '會員等級: 1=一般會員, 9=管理員',
+                referrer VARCHAR(50) DEFAULT NULL COMMENT '推薦人代號',
                 status ENUM('active', 'inactive') DEFAULT 'active',
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                INDEX idx_referrer (referrer)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
+
+        // 如果資料表已存在，嘗試新增 level 和 referrer 欄位
+        try {
+            await pool.execute(`ALTER TABLE members ADD COLUMN level INT DEFAULT 1 COMMENT '會員等級' AFTER balance`);
+        } catch (e) { /* 欄位可能已存在 */ }
+        try {
+            await pool.execute(`ALTER TABLE members ADD COLUMN referrer VARCHAR(50) DEFAULT NULL COMMENT '推薦人代號' AFTER level`);
+        } catch (e) { /* 欄位可能已存在 */ }
+        try {
+            await pool.execute(`ALTER TABLE members ADD INDEX idx_referrer (referrer)`);
+        } catch (e) { /* 索引可能已存在 */ }
 
         // 建立押注記錄表
         await pool.execute(`
@@ -122,24 +136,49 @@ async function initDatabase() {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
 
+        // 檢查是否有 admin 帳號，沒有則建立
+        const [adminRows] = await pool.execute('SELECT COUNT(*) as count FROM members WHERE username = ?', ['admin']);
+        if (adminRows[0].count === 0) {
+            await pool.execute(
+                'INSERT INTO members (username, password, name, balance, level, referrer) VALUES (?, ?, ?, ?, ?, ?)',
+                ['admin', '1234', '管理員', 0, 9, '@']
+            );
+            console.log('已建立管理員帳號 admin');
+        }
+
         // 檢查是否有會員資料，沒有則初始化
-        const [rows] = await pool.execute('SELECT COUNT(*) as count FROM members');
+        const [rows] = await pool.execute('SELECT COUNT(*) as count FROM members WHERE username LIKE ?', ['player%']);
         if (rows[0].count === 0) {
-            // 初始化 100 個測試會員
-            const initialMembers = [];
+            // 初始化 100 個測試會員，建立推薦人層級關係
             for (let i = 1; i <= 100; i++) {
                 const num = i.toString().padStart(3, '0');
                 const balance = 10000 + Math.floor(Math.random() * 20000); // 10000-30000 隨機餘額
-                initialMembers.push([`player${num}`, '1234', `玩家${num}`, balance]);
-            }
 
-            for (const member of initialMembers) {
+                // 設定推薦人：隨機選擇比自己 ID 小的會員或 admin
+                let referrer;
+                if (i === 1) {
+                    referrer = 'admin'; // player001 由 admin 推薦
+                } else {
+                    // 隨機選擇 admin 或之前的某個玩家作為推薦人
+                    const rand = Math.random();
+                    if (rand < 0.3) {
+                        referrer = 'admin'; // 30% 機率由 admin 推薦
+                    } else {
+                        // 70% 機率由之前的玩家推薦
+                        const refNum = Math.floor(Math.random() * (i - 1)) + 1;
+                        referrer = `player${refNum.toString().padStart(3, '0')}`;
+                    }
+                }
+
                 await pool.execute(
-                    'INSERT INTO members (username, password, name, balance) VALUES (?, ?, ?, ?)',
-                    member
+                    'INSERT INTO members (username, password, name, balance, level, referrer) VALUES (?, ?, ?, ?, ?, ?)',
+                    [`player${num}`, '1234', `玩家${num}`, balance, 1, referrer]
                 );
             }
-            console.log('資料庫初始化完成，已建立 100 個會員帳號');
+            console.log('資料庫初始化完成，已建立 100 個會員帳號（含推薦人關係）');
+        } else {
+            // 如果會員已存在但沒有推薦人，則更新推薦人
+            await updateExistingMembersReferrer();
         }
 
         // 清除超過2週的押注記錄
@@ -149,6 +188,63 @@ async function initDatabase() {
     } catch (error) {
         console.error('MySQL 資料庫連線失敗:', error.message);
         throw error;
+    }
+}
+
+// 更新現有會員的推薦人關係
+async function updateExistingMembersReferrer() {
+    try {
+        // 檢查是否需要更新（有會員沒有推薦人）
+        const [needUpdate] = await pool.execute(
+            'SELECT COUNT(*) as count FROM members WHERE referrer IS NULL AND username != ?',
+            ['admin']
+        );
+
+        if (needUpdate[0].count === 0) {
+            return; // 所有會員都已有推薦人
+        }
+
+        console.log(`正在更新 ${needUpdate[0].count} 個會員的推薦人資料...`);
+
+        // 取得所有 player 會員
+        const [players] = await pool.execute(
+            'SELECT id, username FROM members WHERE username LIKE ? ORDER BY id',
+            ['player%']
+        );
+
+        for (let i = 0; i < players.length; i++) {
+            const player = players[i];
+            let referrer;
+
+            if (i === 0) {
+                referrer = 'admin'; // player001 由 admin 推薦
+            } else {
+                // 隨機選擇 admin 或之前的某個玩家作為推薦人
+                const rand = Math.random();
+                if (rand < 0.3) {
+                    referrer = 'admin'; // 30% 機率由 admin 推薦
+                } else {
+                    // 70% 機率由之前的玩家推薦
+                    const refIndex = Math.floor(Math.random() * i);
+                    referrer = players[refIndex].username;
+                }
+            }
+
+            await pool.execute(
+                'UPDATE members SET referrer = ?, level = 1 WHERE id = ? AND referrer IS NULL',
+                [referrer, player.id]
+            );
+        }
+
+        // 更新 admin 的 level 和 referrer
+        await pool.execute(
+            'UPDATE members SET level = 9, referrer = ? WHERE username = ?',
+            ['@', 'admin']
+        );
+
+        console.log('會員推薦人資料更新完成');
+    } catch (error) {
+        console.error('更新推薦人資料錯誤:', error);
     }
 }
 
@@ -186,7 +282,7 @@ async function cleanOldRecords() {
 async function login(username, password) {
     try {
         const [rows] = await pool.execute(
-            'SELECT id, username, name, balance, status FROM members WHERE username = ? AND password = ?',
+            'SELECT id, username, name, balance, level, referrer, status FROM members WHERE username = ? AND password = ?',
             [username, password]
         );
 
@@ -198,7 +294,9 @@ async function login(username, password) {
                     id: member.id,
                     username: member.username,
                     name: member.name,
-                    balance: parseFloat(member.balance)
+                    balance: parseFloat(member.balance),
+                    level: member.level || 1,
+                    referrer: member.referrer
                 }
             };
         }
@@ -214,7 +312,7 @@ async function login(username, password) {
 async function getMember(memberId) {
     try {
         const [rows] = await pool.execute(
-            'SELECT id, username, name, balance, status FROM members WHERE id = ?',
+            'SELECT id, username, name, balance, level, referrer, status FROM members WHERE id = ?',
             [memberId]
         );
 
@@ -225,6 +323,8 @@ async function getMember(memberId) {
                 username: member.username,
                 name: member.name,
                 balance: parseFloat(member.balance),
+                level: member.level || 1,
+                referrer: member.referrer,
                 status: member.status
             };
         }
@@ -288,14 +388,75 @@ async function checkBalance(memberId, amount) {
 async function getAllMembers() {
     try {
         const [rows] = await pool.execute(
-            'SELECT id, username, name, balance, status FROM members ORDER BY id'
+            'SELECT id, username, name, balance, level, referrer, status FROM members ORDER BY id'
+        );
+        return rows.map(row => ({
+            ...row,
+            balance: parseFloat(row.balance),
+            level: row.level || 1
+        }));
+    } catch (error) {
+        console.error('取得所有會員錯誤:', error);
+        return [];
+    }
+}
+
+// 取得會員的推薦人鏈（用於退佣計算）
+async function getReferrerChain(username, maxDepth = 5) {
+    try {
+        const chain = [];
+        let currentUsername = username;
+
+        for (let i = 0; i < maxDepth; i++) {
+            const [rows] = await pool.execute(
+                'SELECT username, referrer, level FROM members WHERE username = ?',
+                [currentUsername]
+            );
+
+            if (rows.length === 0 || !rows[0].referrer || rows[0].referrer === '@') {
+                break;
+            }
+
+            const referrer = rows[0].referrer;
+            const [refRows] = await pool.execute(
+                'SELECT id, username, name, level FROM members WHERE username = ?',
+                [referrer]
+            );
+
+            if (refRows.length > 0) {
+                chain.push({
+                    id: refRows[0].id,
+                    username: refRows[0].username,
+                    name: refRows[0].name,
+                    level: refRows[0].level,
+                    depth: i + 1
+                });
+                currentUsername = referrer;
+            } else {
+                break;
+            }
+        }
+
+        return chain;
+    } catch (error) {
+        console.error('取得推薦人鏈錯誤:', error);
+        return [];
+    }
+}
+
+// 取得會員的下線列表
+async function getDownlines(username) {
+    try {
+        const [rows] = await pool.execute(
+            'SELECT id, username, name, balance, level, referrer, status FROM members WHERE referrer = ?',
+            [username]
         );
         return rows.map(row => ({
             ...row,
             balance: parseFloat(row.balance)
         }));
     } catch (error) {
-        console.error('取得所有會員錯誤:', error);
+        console.error('取得下線列表錯誤:', error);
         return [];
     }
 }
@@ -690,5 +851,7 @@ module.exports = {
     rechargeMember,
     getRechargeRecords,
     getGameResults,
-    cleanOldRecords
+    cleanOldRecords,
+    getReferrerChain,
+    getDownlines
 };
