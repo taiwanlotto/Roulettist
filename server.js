@@ -822,6 +822,18 @@ function calculateBetStats(records) {
 
 // 創建 HTTP 伺服器（提供靜態檔案）
 const server = http.createServer(async (req, res) => {
+    // CORS 支援
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+
+    // 處理 OPTIONS 預檢請求
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
     // 處理 API 請求
     if (req.url === '/api/login' && req.method === 'POST') {
         let body = '';
