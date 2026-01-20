@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>查帳系統</title>
+    <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft JhengHei', Arial, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            min-height: 100vh;
+            color: #fff;
+            padding: 15px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            border: 1px solid #3a9f3a;
+        }
+
+        .header h1 {
+            color: #90EE90;
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .user-info {
+            color: #adb5bd;
+            font-size: 14px;
+        }
+
+        .user-info .username {
+            color: #90EE90;
+            font-weight: bold;
+        }
+
+        .user-info .balance {
+            color: #FFD700;
+        }
+
+        /* 登入區域 */
+        .login-section {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            padding: 30px;
+            border: 1px solid #3a9f3a;
+            text-align: center;
+        }
+
+        .login-section h2 {
+            color: #90EE90;
+            margin-bottom: 20px;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+
+        .login-form input {
+            padding: 12px 15px;
+            border: 1px solid #3a9f3a;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            color: #fff;
+            font-size: 16px;
+        }
+
+        .login-form input::placeholder {
+            color: #666;
+        }
+
+        .login-form button {
+            padding: 12px;
+            background: linear-gradient(180deg, #3a9f3a 0%, #2d7d2d 100%);
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .login-form button:hover {
+            background: linear-gradient(180deg, #4ab34a 0%, #3a9f3a 100%);
+        }
+
+        /* 查詢區域 */
+        .query-section {
+            display: none;
+        }
+
+        .query-section.active {
+            display: block;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #3a9f3a;
+            border-radius: 8px;
+            color: #adb5bd;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .tab-btn:hover {
+            background: rgba(58, 159, 58, 0.3);
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(180deg, #3a9f3a 0%, #2d7d2d 100%);
+            color: #fff;
+        }
+
+        .date-filter {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .date-btn {
+            padding: 8px 16px;
+            background: rgba(0, 0, 0, 0.3);
+            border: 1px solid #4dabf7;
+            border-radius: 6px;
+            color: #4dabf7;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .date-btn:hover {
+            background: rgba(77, 171, 247, 0.2);
+        }
+
+        .date-btn.active {
+            background: #4dabf7;
+            color: #fff;
+        }
+
+        /* 統計卡片 */
+        .stats-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+            border: 1px solid #333;
+        }
+
+        .stat-card .label {
+            color: #adb5bd;
+            font-size: 12px;
+            margin-bottom: 5px;
+        }
+
+        .stat-card .value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #90EE90;
+        }
+
+        .stat-card .value.positive {
+            color: #51cf66;
+        }
+
+        .stat-card .value.negative {
+            color: #ff6b6b;
+        }
+
+        /* 資料表格 */
+        .data-panel {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid #333;
+            margin-bottom: 20px;
+        }
+
+        .data-panel h3 {
+            color: #90EE90;
+            margin-bottom: 15px;
+            font-size: 16px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+        }
+
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        .data-table th {
+            background: rgba(58, 159, 58, 0.3);
+            color: #90EE90;
+            padding: 10px 8px;
+            text-align: left;
+            font-weight: normal;
+        }
+
+        .data-table td {
+            padding: 10px 8px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            color: #ddd;
+        }
+
+        .data-table tr:hover td {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .data-table .win {
+            color: #51cf66;
+        }
+
+        .data-table .lose {
+            color: #ff6b6b;
+        }
+
+        .data-table .pending {
+            color: #ffd43b;
+        }
+
+        /* 下線列表 */
+        .downline-item {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 10px;
+            border: 1px solid #333;
+        }
+
+        .downline-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .downline-name {
+            color: #4dabf7;
+            font-weight: bold;
+        }
+
+        .downline-stats {
+            display: flex;
+            gap: 15px;
+            font-size: 12px;
+            color: #adb5bd;
+        }
+
+        .downline-details {
+            display: none;
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #333;
+        }
+
+        .downline-details.show {
+            display: block;
+        }
+
+        /* 空資料提示 */
+        .no-data {
+            text-align: center;
+            padding: 30px;
+            color: #666;
+        }
+
+        /* 載入中 */
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #90EE90;
+        }
+
+        /* 登出按鈕 */
+        .logout-btn {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 8px 15px;
+            background: rgba(255, 107, 107, 0.3);
+            border: 1px solid #ff6b6b;
+            border-radius: 6px;
+            color: #ff6b6b;
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255, 107, 107, 0.5);
+        }
+
+        /* 響應式 */
+        @media (max-width: 600px) {
+            .data-table {
+                font-size: 11px;
+            }
+
+            .data-table th, .data-table td {
+                padding: 8px 4px;
+            }
+
+            .stats-cards {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 登入區域 -->
+        <div class="login-section" id="loginSection">
+            <h2>會員查帳系統</h2>
+            <div class="login-form">
+                <input type="text" id="username" placeholder="會員帳號" autocomplete="username">
+                <input type="password" id="password" placeholder="密碼" autocomplete="current-password">
+                <button onclick="login()">登入</button>
+            </div>
+            <p id="loginError" style="color: #ff6b6b; margin-top: 15px;"></p>
+        </div>
+
+        <!-- 查詢區域 -->
+        <div class="query-section" id="querySection">
+            <button class="logout-btn" onclick="logout()">登出</button>
+
+            <div class="header">
+                <h1>查帳系統</h1>
+                <div class="user-info">
+                    <span class="username" id="displayName">--</span>
+                    <span style="margin: 0 10px;">|</span>
+                    餘額: <span class="balance" id="displayBalance">$0</span>
+                </div>
+            </div>
+
+            <!-- 時間篩選 -->
+            <div class="date-filter">
+                <button class="date-btn active" data-range="today" onclick="setDateRange('today')">今日</button>
+                <button class="date-btn" data-range="thisWeek" onclick="setDateRange('thisWeek')">本週</button>
+                <button class="date-btn" data-range="lastWeek" onclick="setDateRange('lastWeek')">上週</button>
+            </div>
+
+            <!-- 功能頁籤 -->
+            <div class="tabs">
+                <button class="tab-btn active" data-tab="self" onclick="switchTab('self')">我的帳務</button>
+                <button class="tab-btn" data-tab="downline" onclick="switchTab('downline')">下線帳務</button>
+            </div>
+
+            <!-- 我的帳務 -->
+            <div id="selfTab" class="tab-content">
+                <div class="stats-cards">
+                    <div class="stat-card">
+                        <div class="label">下注筆數</div>
+                        <div class="value" id="selfBetCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">下注總額</div>
+                        <div class="value" id="selfBetAmount">$0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">中獎次數</div>
+                        <div class="value" id="selfWinCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">損益</div>
+                        <div class="value" id="selfProfit">$0</div>
+                    </div>
+                </div>
+
+                <div class="data-panel">
+                    <h3>押注明細</h3>
+                    <div class="table-container" style="overflow-x: auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>時間</th>
+                                    <th>期數</th>
+                                    <th>類型</th>
+                                    <th>目標</th>
+                                    <th>金額</th>
+                                    <th>開獎</th>
+                                    <th>損益</th>
+                                </tr>
+                            </thead>
+                            <tbody id="selfBetRecords">
+                                <tr><td colspan="7" class="no-data">載入中...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 下線帳務 -->
+            <div id="downlineTab" class="tab-content" style="display: none;">
+                <div class="stats-cards">
+                    <div class="stat-card">
+                        <div class="label">直屬下線</div>
+                        <div class="value" id="downlineCount">0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">下線總投注</div>
+                        <div class="value" id="downlineBetAmount">$0</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="label">下線總損益</div>
+                        <div class="value" id="downlineProfit">$0</div>
+                    </div>
+                </div>
+
+                <div class="data-panel">
+                    <h3>下線列表</h3>
+                    <div id="downlineList">
+                        <div class="no-data">載入中...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // MQTT 設定
+        const MQTT_BROKER = 'wss://tw5399.com:9002';
+        const CHANNEL_ID = window.CHANNEL_ID || 'local';
+        const CHANNEL_PREFIX = `roulette/${CHANNEL_ID}`;
+        const CLIENT_ID = 'account_' + Math.random().toString(16).substr(2, 8);
+
+        let mqttClient = null;
+        let currentMember = null;
+        let currentDateRange = 'today';
+        let currentTab = 'self';
+
+        // 登入
+        async function login() {
+            const username = document.getElementById('username').value.trim();
+            const password = document.getElementById('password').value.trim();
+
+            if (!username || !password) {
+                document.getElementById('loginError').textContent = '請輸入帳號和密碼';
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    currentMember = result.member;
+                    localStorage.setItem('member', JSON.stringify(currentMember));
+                    showQuerySection();
+                    connectMQTT();
+                    loadData();
+                } else {
+                    document.getElementById('loginError').textContent = result.message || '登入失敗';
+                }
+            } catch (error) {
+                document.getElementById('loginError').textContent = '連線錯誤，請稍後再試';
+            }
+        }
+
+        // 登出
+        function logout() {
+            currentMember = null;
+            localStorage.removeItem('member');
+            if (mqttClient) {
+                mqttClient.end();
+                mqttClient = null;
+            }
+            document.getElementById('loginSection').style.display = 'block';
+            document.getElementById('querySection').classList.remove('active');
+        }
+
+        // 顯示查詢區域
+        function showQuerySection() {
+            document.getElementById('loginSection').style.display = 'none';
+            document.getElementById('querySection').classList.add('active');
+            document.getElementById('displayName').textContent = currentMember.name;
+            document.getElementById('displayBalance').textContent = '$' + currentMember.balance.toLocaleString();
+        }
+
+        // 連接 MQTT
+        function connectMQTT() {
+            mqttClient = mqtt.connect(MQTT_BROKER, {
+                username: 'palee',
+                password: '888168',
+                clientId: CLIENT_ID,
+                clean: true
+            });
+
+            mqttClient.on('connect', () => {
+                console.log('MQTT 連線成功');
+                mqttClient.subscribe(`${CHANNEL_PREFIX}/account/response/${currentMember.id}`);
+            });
+
+            mqttClient.on('message', (topic, message) => {
+                try {
+                    const data = JSON.parse(message.toString());
+                    handleResponse(data);
+                } catch (e) {
+                    console.error('處理訊息錯誤:', e);
+                }
+            });
+        }
+
+        // 處理回應
+        function handleResponse(data) {
+            if (data.type === 'betRecords') {
+                renderSelfBetRecords(data.records);
+            } else if (data.type === 'downlineData') {
+                renderDownlineData(data);
+            }
+        }
+
+        // 設定日期範圍
+        function setDateRange(range) {
+            currentDateRange = range;
+            document.querySelectorAll('.date-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.range === range);
+            });
+            loadData();
+        }
+
+        // 切換頁籤
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tab);
+            });
+            document.getElementById('selfTab').style.display = tab === 'self' ? 'block' : 'none';
+            document.getElementById('downlineTab').style.display = tab === 'downline' ? 'block' : 'none';
+            loadData();
+        }
+
+        // 計算日期範圍
+        function getDateRange() {
+            const now = new Date();
+            let startDate, endDate;
+
+            if (currentDateRange === 'today') {
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            } else if (currentDateRange === 'thisWeek') {
+                const dayOfWeek = now.getDay();
+                const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // 週一為起始
+                startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff);
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
+            } else if (currentDateRange === 'lastWeek') {
+                const dayOfWeek = now.getDay();
+                const diff = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+                endDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diff - 1, 23, 59, 59);
+                startDate = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate() - 6);
+            }
+
+            return {
+                startDate: startDate.toISOString().split('T')[0],
+                endDate: endDate.toISOString().split('T')[0]
+            };
+        }
+
+        // 載入資料
+        async function loadData() {
+            if (!currentMember) return;
+
+            const { startDate, endDate } = getDateRange();
+
+            if (currentTab === 'self') {
+                loadSelfData(startDate, endDate);
+            } else {
+                loadDownlineData(startDate, endDate);
+            }
+        }
+
+        // 載入自己的資料
+        async function loadSelfData(startDate, endDate) {
+            document.getElementById('selfBetRecords').innerHTML = '<tr><td colspan="7" class="no-data">載入中...</td></tr>';
+
+            try {
+                const response = await fetch(`/api/account/self?memberId=${currentMember.id}&startDate=${startDate}&endDate=${endDate}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    renderSelfBetRecords(data.records);
+                    updateSelfStats(data.stats);
+                }
+            } catch (error) {
+                document.getElementById('selfBetRecords').innerHTML = '<tr><td colspan="7" class="no-data">載入失敗</td></tr>';
+            }
+        }
+
+        // 載入下線資料
+        async function loadDownlineData(startDate, endDate) {
+            document.getElementById('downlineList').innerHTML = '<div class="no-data">載入中...</div>';
+
+            try {
+                const response = await fetch(`/api/account/downline?memberId=${currentMember.id}&username=${currentMember.username}&startDate=${startDate}&endDate=${endDate}`);
+                const data = await response.json();
+
+                if (data.success) {
+                    renderDownlineData(data);
+                }
+            } catch (error) {
+                document.getElementById('downlineList').innerHTML = '<div class="no-data">載入失敗</div>';
+            }
+        }
+
+        // 渲染自己的押注記錄
+        function renderSelfBetRecords(records) {
+            const tbody = document.getElementById('selfBetRecords');
+
+            if (!records || records.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="no-data">無押注記錄</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = records.map(r => {
+                const profitClass = r.profit > 0 ? 'win' : (r.profit < 0 ? 'lose' : 'pending');
+                const profitText = r.profit !== null ? (r.profit >= 0 ? '+$' + r.profit : '-$' + Math.abs(r.profit)) : '-';
+                const resultText = r.winning_number || '-';
+
+                return `
+                    <tr>
+                        <td>${formatTime(r.created_at)}</td>
+                        <td>${r.round_number}</td>
+                        <td>${getBetTypeName(r.bet_type)}</td>
+                        <td>${getBetTargetName(r.bet_type, r.bet_target)}</td>
+                        <td>$${r.amount.toLocaleString()}</td>
+                        <td>${resultText}</td>
+                        <td class="${profitClass}">${profitText}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // 更新自己的統計
+        function updateSelfStats(stats) {
+            document.getElementById('selfBetCount').textContent = stats.betCount || 0;
+            document.getElementById('selfBetAmount').textContent = '$' + (stats.betAmount || 0).toLocaleString();
+            document.getElementById('selfWinCount').textContent = stats.winCount || 0;
+
+            const profitEl = document.getElementById('selfProfit');
+            const profit = stats.profit || 0;
+            profitEl.textContent = (profit >= 0 ? '+$' : '-$') + Math.abs(profit).toLocaleString();
+            profitEl.className = 'value ' + (profit >= 0 ? 'positive' : 'negative');
+        }
+
+        // 渲染下線資料
+        function renderDownlineData(data) {
+            const { downlines, totalStats } = data;
+
+            document.getElementById('downlineCount').textContent = downlines ? downlines.length : 0;
+            document.getElementById('downlineBetAmount').textContent = '$' + (totalStats?.betAmount || 0).toLocaleString();
+
+            const profitEl = document.getElementById('downlineProfit');
+            const profit = totalStats?.profit || 0;
+            profitEl.textContent = (profit >= 0 ? '+$' : '-$') + Math.abs(profit).toLocaleString();
+            profitEl.className = 'value ' + (profit >= 0 ? 'positive' : 'negative');
+
+            const listEl = document.getElementById('downlineList');
+
+            if (!downlines || downlines.length === 0) {
+                listEl.innerHTML = '<div class="no-data">無下線會員</div>';
+                return;
+            }
+
+            listEl.innerHTML = downlines.map((d, index) => `
+                <div class="downline-item">
+                    <div class="downline-header" onclick="toggleDownlineDetails(${index})">
+                        <span class="downline-name">${d.name} (${d.username})</span>
+                        <div class="downline-stats">
+                            <span>投注: $${(d.stats?.betAmount || 0).toLocaleString()}</span>
+                            <span class="${(d.stats?.profit || 0) >= 0 ? 'win' : 'lose'}">
+                                損益: ${(d.stats?.profit || 0) >= 0 ? '+' : ''}$${(d.stats?.profit || 0).toLocaleString()}
+                            </span>
+                        </div>
+                    </div>
+                    <div class="downline-details" id="downlineDetails${index}">
+                        ${renderDownlineBetTable(d.records)}
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 渲染下線押注表格
+        function renderDownlineBetTable(records) {
+            if (!records || records.length === 0) {
+                return '<div class="no-data" style="padding: 10px;">無押注記錄</div>';
+            }
+
+            return `
+                <table class="data-table" style="margin-top: 10px;">
+                    <thead>
+                        <tr>
+                            <th>時間</th>
+                            <th>類型</th>
+                            <th>目標</th>
+                            <th>金額</th>
+                            <th>損益</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${records.slice(0, 10).map(r => `
+                            <tr>
+                                <td>${formatTime(r.created_at)}</td>
+                                <td>${getBetTypeName(r.bet_type)}</td>
+                                <td>${getBetTargetName(r.bet_type, r.bet_target)}</td>
+                                <td>$${r.amount.toLocaleString()}</td>
+                                <td class="${r.profit > 0 ? 'win' : (r.profit < 0 ? 'lose' : '')}">
+                                    ${r.profit !== null ? (r.profit >= 0 ? '+$' + r.profit : '-$' + Math.abs(r.profit)) : '-'}
+                                </td>
+                            </tr>
+                        `).join('')}
+                        ${records.length > 10 ? `<tr><td colspan="5" style="text-align: center; color: #666;">... 共 ${records.length} 筆</td></tr>` : ''}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        // 切換下線詳情
+        function toggleDownlineDetails(index) {
+            const el = document.getElementById('downlineDetails' + index);
+            el.classList.toggle('show');
+        }
+
+        // 格式化時間
+        function formatTime(dateStr) {
+            if (!dateStr) return '-';
+            const date = new Date(dateStr);
+            return `${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getDate().toString().padStart(2, '0')} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+        }
+
+        // 取得投注類型名稱
+        function getBetTypeName(type) {
+            const names = { number: '號碼', oddeven: '單雙', bigsmall: '大小', color: '顏色' };
+            return names[type] || type;
+        }
+
+        // 取得投注目標名稱
+        function getBetTargetName(type, target) {
+            if (type === 'number') return target;
+            const names = {
+                odd: '單', even: '雙',
+                big: '大', small: '小',
+                red: '紅', blue: '藍', green: '綠'
+            };
+            return names[target] || target;
+        }
+
+        // 頁面載入時檢查登入狀態
+        window.onload = function() {
+            const savedMember = localStorage.getItem('member');
+            if (savedMember) {
+                currentMember = JSON.parse(savedMember);
+                showQuerySection();
+                connectMQTT();
+                loadData();
+            }
+        };
+
+        // Enter 鍵登入
+        document.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' && document.getElementById('loginSection').style.display !== 'none') {
+                login();
+            }
+        });
+    </script>
+</body>
+</html>

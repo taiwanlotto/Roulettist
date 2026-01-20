@@ -603,6 +603,35 @@ async function getMemberBetRecords(memberId, days = 14) {
     }
 }
 
+// 按日期範圍取得會員押注記錄（查帳用）
+async function getMemberBetRecordsByDate(memberId, startDate, endDate) {
+    try {
+        const [rows] = await pool.execute(`
+            SELECT
+                br.id,
+                br.round_number,
+                br.bet_type,
+                br.bet_target,
+                br.amount,
+                br.winning_number,
+                br.profit,
+                br.created_at
+            FROM bet_records br
+            WHERE br.member_id = ? AND DATE(br.created_at) >= ? AND DATE(br.created_at) <= ?
+            ORDER BY br.created_at DESC
+        `, [memberId, startDate, endDate]);
+
+        return rows.map(row => ({
+            ...row,
+            amount: parseFloat(row.amount),
+            profit: row.profit ? parseFloat(row.profit) : null
+        }));
+    } catch (error) {
+        console.error('按日期取得會員押注記錄錯誤:', error);
+        return [];
+    }
+}
+
 // 取得所有押注記錄（管理員用，可指定天數範圍）
 async function getAllBetRecords(days = 14) {
     try {
@@ -845,6 +874,7 @@ module.exports = {
     updateBetRecordResult,
     saveGameResult,
     getMemberBetRecords,
+    getMemberBetRecordsByDate,
     getAllBetRecords,
     getMemberProfitStats,
     getSystemProfitStats,

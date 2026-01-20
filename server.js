@@ -803,6 +803,23 @@ async function updateAllPlayerBalances() {
     }
 }
 
+// 計算押注統計
+function calculateBetStats(records) {
+    let betCount = 0;
+    let betAmount = 0;
+    let winCount = 0;
+    let profit = 0;
+
+    records.forEach(r => {
+        betCount++;
+        betAmount += parseFloat(r.amount) || 0;
+        if (r.profit > 0) winCount++;
+        profit += parseFloat(r.profit) || 0;
+    });
+
+    return { betCount, betAmount, winCount, profit };
+}
+
 // 創建 HTTP 伺服器（提供靜態檔案）
 const server = http.createServer(async (req, res) => {
     // 處理 API 請求
@@ -856,6 +873,73 @@ const server = http.createServer(async (req, res) => {
                 res.end(JSON.stringify({ success: false }));
             }
         });
+        return;
+    }
+
+    // 查帳 API - 自己的押注記錄
+    if (req.url.startsWith('/api/account/self') && req.method === 'GET') {
+        const urlParams = new URL(req.url, `http://${req.headers.host}`);
+        const memberId = urlParams.searchParams.get('memberId');
+        const startDate = urlParams.searchParams.get('startDate');
+        const endDate = urlParams.searchParams.get('endDate');
+
+        try {
+            const records = await db.getMemberBetRecordsByDate(memberId, startDate, endDate);
+            const stats = calculateBetStats(records);
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: true, records, stats }));
+        } catch (error) {
+            console.error('查帳 API 錯誤:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: '查詢失敗' }));
+        }
+        return;
+    }
+
+    // 查帳 API - 下線的押注記錄
+    if (req.url.startsWith('/api/account/downline') && req.method === 'GET') {
+        const urlParams = new URL(req.url, `http://${req.headers.host}`);
+        const memberId = urlParams.searchParams.get('memberId');
+        const username = urlParams.searchParams.get('username');
+        const startDate = urlParams.searchParams.get('startDate');
+        const endDate = urlParams.searchParams.get('endDate');
+
+        try {
+            const downlines = await db.getDownlines(username);
+            let totalBetAmount = 0;
+            let totalProfit = 0;
+
+            const downlineData = [];
+            for (const d of downlines) {
+                const records = await db.getMemberBetRecordsByDate(d.id, startDate, endDate);
+                const stats = calculateBetStats(records);
+                totalBetAmount += stats.betAmount;
+                totalProfit += stats.profit;
+
+                downlineData.push({
+                    id: d.id,
+                    username: d.username,
+                    name: d.name,
+                    records,
+                    stats
+                });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                success: true,
+                downlines: downlineData,
+                totalStats: {
+                    betAmount: totalBetAmount,
+                    profit: totalProfit
+                }
+            }));
+        } catch (error) {
+            console.error('下線查帳 API 錯誤:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ success: false, message: '查詢失敗' }));
+        }
         return;
     }
 
