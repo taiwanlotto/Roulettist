@@ -460,7 +460,8 @@
         const CLIENT_ID = 'account_' + Math.random().toString(16).substr(2, 8);
 
         // API 基底 URL - 使用 Node.js 伺服器
-        const API_BASE = window.location.port === '3000' ? '' : `${window.location.protocol}//${window.location.hostname}:3000`;
+        // 如果是從 HTTPS 訪問，需要直接使用 3000 端口頁面，否則會有 Mixed Content 問題
+        const API_BASE = window.location.port === '3000' ? '' : `http://${window.location.hostname}:3000`;
 
         let mqttClient = null;
         let currentMember = null;
