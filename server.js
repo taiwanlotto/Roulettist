@@ -627,19 +627,25 @@ function calculateGameResult(winningNumber) {
     const winningBets = bets[winningNumber] || { total: 0, players: [] };
     let totalPayout = winningBets.total * 36;
 
-    // 計算單雙投注派彩 (賠率 1:1，返還本金所以 x2)
-    if (isOdd) {
-        totalPayout += oddEvenBets.odd.total * 2;
-    } else {
-        totalPayout += oddEvenBets.even.total * 2;
+    // 計算單雙投注派彩 (賠率 1:0.9，返還本金所以 x1.9)，39莊家通吃
+    if (winNum !== 39) {
+        if (isOdd) {
+            totalPayout += oddEvenBets.odd.total * 1.9;
+        } else {
+            totalPayout += oddEvenBets.even.total * 1.9;
+        }
     }
+    // 39 莊家通吃，單雙不派彩
 
-    // 計算大小投注派彩 (賠率 1:1，返還本金所以 x2)
-    if (isBig) {
-        totalPayout += bigSmallBets.big.total * 2;
-    } else if (isSmall) {
-        totalPayout += bigSmallBets.small.total * 2;
+    // 計算大小投注派彩 (賠率 1:0.9，返還本金所以 x1.9)，39莊家通吃
+    if (winNum !== 39) {
+        if (isBig) {
+            totalPayout += bigSmallBets.big.total * 1.9;
+        } else if (isSmall) {
+            totalPayout += bigSmallBets.small.total * 1.9;
+        }
     }
+    // 39 莊家通吃，大小不派彩
 
     // 計算顏色投注派彩 (賠率 1:1.8，返還本金所以 x2.8)
     totalPayout += colorBets[winningColor].total * 2.8;
@@ -686,26 +692,26 @@ function calculatePlayerProfits(winningNumber) {
         });
     }
 
-    // 單雙投注
+    // 單雙投注 (賠率 1:0.9)，39莊家通吃
     let winningOddEven = winNum === 39 ? null : (isOdd ? 'odd' : 'even');
     ['odd', 'even'].forEach(oddeven => {
         oddEvenBets[oddeven].players.forEach(player => {
             if (!playerProfits[player.id]) playerProfits[player.id] = 0;
             if (winningOddEven && oddeven === winningOddEven) {
-                playerProfits[player.id] += player.amount;
+                playerProfits[player.id] += player.amount * 0.9; // 1賠0.9
             } else {
                 playerProfits[player.id] -= player.amount;
             }
         });
     });
 
-    // 大小投注
+    // 大小投注 (賠率 1:0.9)，39莊家通吃
     let winningBigSmall = winNum === 39 ? null : (isBig ? 'big' : (isSmall ? 'small' : null));
     ['big', 'small'].forEach(bigsmall => {
         bigSmallBets[bigsmall].players.forEach(player => {
             if (!playerProfits[player.id]) playerProfits[player.id] = 0;
             if (winningBigSmall && bigsmall === winningBigSmall) {
-                playerProfits[player.id] += player.amount;
+                playerProfits[player.id] += player.amount * 0.9; // 1賠0.9
             } else {
                 playerProfits[player.id] -= player.amount;
             }
@@ -756,32 +762,32 @@ async function payoutWinners(winningNumber) {
         }
     }
 
-    // 單雙投注派彩
+    // 單雙投注派彩 (賠率 1:0.9，含本金 x1.9)
     if (winNum !== 39) {
         const winningOddEven = isOdd ? 'odd' : 'even';
         const winningOddEvenBets = oddEvenBets[winningOddEven];
         if (winningOddEvenBets && winningOddEvenBets.players.length > 0) {
             for (const player of winningOddEvenBets.players) {
-                const payout = player.amount * 2;
+                const payout = player.amount * 1.9;
                 await db.updateBalance(player.id, payout);
                 console.log(`單雙派彩: ${player.name} 投注${isOdd ? '單' : '雙'} $${player.amount}, 獲得 $${payout}`);
             }
         }
 
-        // 大小投注派彩
+        // 大小投注派彩 (賠率 1:0.9，含本金 x1.9)
         const winningBigSmall = isBig ? 'big' : (isSmall ? 'small' : null);
         if (winningBigSmall) {
             const winningBigSmallBets = bigSmallBets[winningBigSmall];
             if (winningBigSmallBets && winningBigSmallBets.players.length > 0) {
                 for (const player of winningBigSmallBets.players) {
-                    const payout = player.amount * 2;
+                    const payout = player.amount * 1.9;
                     await db.updateBalance(player.id, payout);
                     console.log(`大小派彩: ${player.name} 投注${isBig ? '大' : '小'} $${player.amount}, 獲得 $${payout}`);
                 }
             }
         }
     } else {
-        console.log('39 莊家通殺，單雙大小投注不派彩');
+        console.log('39 莊家通吃，單雙大小投注不派彩');
     }
 }
 
