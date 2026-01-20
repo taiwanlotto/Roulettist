@@ -242,21 +242,29 @@ function processRoundResult(winningNumber) {
     currentRoundBets = [];
 }
 
+// 標記本局是否已經下注過
+let currentRoundBetPlaced = false;
+
 function simulateBets() {
     if (!simulationActive || currentPhase !== 'betting') return;
+    if (currentRoundBetPlaced) return; // 本局已經下注過，不再重複
 
-    // 隨機選擇 2-8 個玩家下注
-    const numBets = randomInt(2, 8);
+    currentRoundBetPlaced = true;
+
+    // 隨機選擇 3-10 個玩家下注
+    const numBets = randomInt(3, 10);
     const selectedPlayers = new Set();
 
-    while (selectedPlayers.size < numBets) {
+    while (selectedPlayers.size < numBets && selectedPlayers.size < players.length) {
         selectedPlayers.add(randomChoice(players));
     }
+
+    console.log(`本局隨機選擇 ${selectedPlayers.size} 人下注`);
 
     let delay = 0;
     selectedPlayers.forEach(player => {
         setTimeout(() => placeBet(player), delay);
-        delay += randomInt(200, 800);
+        delay += randomInt(500, 1500); // 每人間隔 0.5-1.5 秒
     });
 }
 
@@ -381,14 +389,14 @@ function connect() {
 
                 if (oldPhase !== 'betting' && currentPhase === 'betting') {
                     console.log(`\n══════ 第 ${currentRoundNumber} 期 開放下注 ══════\n`);
-                    // 投注期間每 1-2 秒模擬一批下注
-                    const betInterval = setInterval(() => {
-                        if (currentPhase !== 'betting' || !simulationActive) {
-                            clearInterval(betInterval);
-                        } else {
+                    // 重置本局下注標記
+                    currentRoundBetPlaced = false;
+                    // 延遲 1-3 秒後開始下注（模擬真實玩家思考時間）
+                    setTimeout(() => {
+                        if (currentPhase === 'betting' && simulationActive) {
                             simulateBets();
                         }
-                    }, randomInt(1000, 2000));
+                    }, randomInt(1000, 3000));
                 }
 
                 if (currentPhase === 'spinning' && oldPhase === 'betting') {
